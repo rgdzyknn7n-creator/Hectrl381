@@ -1,1 +1,234 @@
+  <!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Huawei Router</title>
 
+<style>
+* {
+    box-sizing: border-box;
+    font-family: Arial, sans-serif;
+}
+
+body {
+    margin: 0;
+    background: #0b0f14;
+    color: white;
+}
+
+.container {
+    max-width: 600px;
+    margin: auto;
+    padding: 20px;
+}
+
+.header {
+    background: linear-gradient(135deg,#111923,#1b2633);
+    padding: 25px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.header h1 {
+    margin: 0 0 8px;
+    font-size: 27px;
+}
+
+.header p {
+    margin: 0;
+    color: #9ca8b5;
+}
+
+.card {
+    background: #111820;
+    border: 1px solid #27313d;
+    border-radius: 18px;
+    padding: 20px;
+    margin-bottom: 15px;
+}
+
+.card h2 {
+    margin-top: 0;
+    font-size: 19px;
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.dot {
+    width: 12px;
+    height: 12px;
+    background: #22c55e;
+    border-radius: 50%;
+}
+
+.info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.info div {
+    background: #0b1117;
+    padding: 15px;
+    border-radius: 12px;
+}
+
+.label {
+    color: #8d99a6;
+    font-size: 13px;
+}
+
+.value {
+    margin-top: 5px;
+    font-size: 17px;
+    font-weight: bold;
+}
+
+input {
+    width: 100%;
+    padding: 15px;
+    border-radius: 12px;
+    border: 1px solid #303b48;
+    background: #0b1117;
+    color: white;
+    font-size: 16px;
+    margin: 10px 0;
+}
+
+button {
+    width: 100%;
+    padding: 15px;
+    border: 0;
+    border-radius: 12px;
+    background: #2563eb;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    margin-top: 8px;
+}
+
+button:active {
+    transform: scale(.98);
+}
+
+.secondary {
+    background: #202b38;
+}
+
+.footer {
+    text-align: center;
+    color: #687584;
+    font-size: 12px;
+    margin-top: 25px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+        <h1>📡 Huawei Router</h1>
+        <p>لوحة تحكم الراوتر</p>
+    </div>
+
+    <div class="card">
+        <h2>حالة الراوتر</h2>
+
+        <div class="status">
+            <span class="dot"></span>
+            <span>الراوتر متصل</span>
+        </div>
+
+        <div class="info">
+
+            <div>
+                <div class="label">الموديل</div>
+                <div class="value">H158-381</div>
+            </div>
+
+            <div>
+                <div class="label">الشبكة</div>
+                <div class="value">5G</div>
+            </div>
+
+            <div>
+                <div class="label">IP الراوتر</div>
+                <div class="value">192.168.8.1</div>
+            </div>
+
+            <div>
+                <div class="label">الحالة</div>
+                <div class="value">متصل</div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>🌐 الدخول إلى الراوتر</h2>
+
+        <input
+            id="routerIP"
+            value="192.168.8.1"
+            placeholder="IP الراوتر">
+
+        <button onclick="openRouter()">
+            فتح لوحة تحكم الراوتر
+        </button>
+
+    </div>
+
+    <div class="card">
+        <h2>⚡ اختصارات</h2>
+
+        <button class="secondary" onclick="openRouter()">
+            إعدادات الراوتر
+        </button>
+
+        <button class="secondary" onclick="openRouter()">
+            معلومات الشبكة
+        </button>
+
+        <button class="secondary" onclick="openRouter()">
+            الأجهزة المتصلة
+        </button>
+
+    </div>
+
+    <div class="footer">
+        Huawei Router Manager
+    </div>
+
+</div>
+
+<script>
+
+function openRouter() {
+
+    let ip = document.getElementById("routerIP").value.trim();
+
+    if (!ip) {
+        alert("اكتب عنوان IP للراوتر");
+        return;
+    }
+
+    if (!ip.startsWith("http")) {
+        ip = "http://" + ip;
+    }
+
+    window.location.href = ip;
+}
+
+</script>
+
+</body>
+</html>
