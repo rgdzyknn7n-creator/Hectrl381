@@ -36,6 +36,10 @@ jobs:
         shell: bash
         run: python3 scripts/fix_session_readings.py
 
+      - name: Add LTE band aggregation controls
+        shell: bash
+        run: python3 scripts/fix_band_controls.py
+
       - name: Build real Android APK
         shell: bash
         run: gradle --no-daemon :app:assembleDebug
@@ -43,5 +47,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Huawei-Router-Manager-v10
+          name: Huawei-Router-Manager-v11
           path: app/build/outputs/apk/debug/app-debug.apk
