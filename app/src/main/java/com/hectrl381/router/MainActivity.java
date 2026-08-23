@@ -9,6 +9,8 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -44,6 +46,10 @@ public class MainActivity extends Activity {
     private String cookie = "", token = "", tokenOne = "", tokenTwo = "";
     private EditText ipInput, userInput, passInput;
     private Map<String,String> lastData = new LinkedHashMap<>();
+    private final Handler refreshHandler = new Handler(Looper.getMainLooper());
+    private volatile boolean refreshInFlight = false;
+    private boolean autoRefresh = false;
+    private final Runnable refreshLoop = () -> refreshData();
 
     private int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density + .5f); }
     private TextView tv(String s,float size){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(Color.WHITE);t.setPadding(dp(8),dp(6),dp(8),dp(6));return t;}
@@ -53,7 +59,7 @@ public class MainActivity extends Activity {
     private Button actionButton(String text,int color){Button b=new Button(this);b.setText(text);b.setTextSize(13);b.setTextColor(Color.WHITE);b.setAllCaps(false);b.setGravity(Gravity.CENTER);b.setBackground(bg(color,14));b.setLayoutParams(new LinearLayout.LayoutParams(0,dp(54),1));return b;}
 
     @Override public void onCreate(Bundle state){super.onCreate(state);loginScreen();}
-    @Override protected void onDestroy(){io.shutdownNow();super.onDestroy();}
+    @Override protected void onDestroy(){stopAutoRefresh();io.shutdownNow();super.onDestroy();}
 
     private void loginScreen(){
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setGravity(Gravity.CENTER_HORIZONTAL);root.setPadding(dp(22),dp(30),dp(22),dp(22));root.setBackgroundColor(Color.rgb(5,9,14));
@@ -72,7 +78,7 @@ public class MainActivity extends Activity {
         username=userInput.getText().toString().trim();password=passInput.getText().toString();
         if(router.isEmpty()){toast("اكتب عنوان الراوتر");return;}
         setContentView(tv("جاري الاتصال بالراوتر...",16));
-        io.execute(()->{try{if(password.isEmpty())throw new Exception("أدخل كلمة مرور الإدارة");login();runOnUiThread(this::dashboard);refreshData();}catch(Exception e){runOnUiThread(()->{loginScreen();toast("فشل تسجيل الدخول: "+e.getMessage());});}});
+        io.execute(()->{try{if(password.isEmpty())throw new Exception("أدخل كلمة مرور الإدارة");login();runOnUiThread(()->{dashboard();startAutoRefresh();});}catch(Exception e){runOnUiThread(()->{loginScreen();toast("فشل تسجيل الدخول: "+e.getMessage());});}});
     }
     private String base(){return "http://"+router;}
 
@@ -102,7 +108,13 @@ public class MainActivity extends Activity {
     private void verifyLoggedIn() throws Exception{HttpResult r=request("GET","/api/user/state-login",null,false);String state=firstNonEmpty(tag(r.body,"State"),tag(r.body,"state"));if(!"0".equals(state)){String err=errorCode(r.body);throw new Exception(err.isEmpty()?"الراوتر لم يؤكد تسجيل الدخول":"رمز الراوتر "+err);}}
     private void captureTokens(HttpResult r){String h=r.tokenHeader;if(h!=null&&!h.isEmpty()){String[]p=h.trim().split("#");token=p.length>0?p[0].trim():"";tokenOne=p.length>1?p[1].trim():"";tokenTwo=p.length>2?p[2].trim():"";}if((token==null||token.isEmpty())&&r.tokenOne!=null&&!r.tokenOne.isEmpty())token=firstToken(r.tokenOne);}
 
-    private void refreshData(){io.execute(()->{try{Map<String,String>m=new LinkedHashMap<>();add(m,get("/api/monitoring/status"),new String[]{"ConnectionStatus","CurrentNetworkType","CurrentNetworkTypeEx","SignalIcon","CurrentWifiUser"});add(m,get("/api/device/signal"),new String[]{"rsrp","rsrq","sinr","rssi","nrrsrp","nrrsrq","nrsinr","nrrssi","band","pci","scc_pci","cell_id","enodeb_id","nrearfcn","lteearfcn"});add(m,get("/api/net/current-plmn"),new String[]{"FullName","ShortName","Numeric","Rat","NetworkName","plmn"});add(m,get("/api/device/information"),new String[]{"DeviceName","SoftwareVersion","SerialNumber","Imei"});add(m,get("/api/monitoring/traffic-statistics"),new String[]{"CurrentDownloadRate","CurrentUploadRate","TotalDownload","TotalUpload","CurrentConnectTime"});add(m,get("/api/net/net-mode"),new String[]{"NetworkMode","LTEBand","NRBand","NetworkBand"});lastData=m;runOnUiThread(()->dashboardWith(m));}catch(Exception e){runOnUiThread(()->toast("تعذر تحديث البيانات: "+e.getMessage()));}});}
+    private void startAutoRefresh(){autoRefresh=true;refreshHandler.removeCallbacks(refreshLoop);refreshHandler.post(refreshLoop);}
+    private void stopAutoRefresh(){autoRefresh=false;refreshHandler.removeCallbacks(refreshLoop);}
+    private void refreshData(){
+        if(refreshInFlight)return;
+        refreshInFlight=true;
+        io.execute(()->{try{Map<String,String>m=new LinkedHashMap<>();add(m,get("/api/monitoring/status"),new String[]{"ConnectionStatus","CurrentNetworkType","CurrentNetworkTypeEx","SignalIcon","CurrentWifiUser"});add(m,get("/api/device/signal"),new String[]{"rsrp","rsrq","sinr","rssi","nrrsrp","nrrsrq","nrsinr","nrrssi","band","pci","scc_pci","cell_id","enodeb_id","nrearfcn","lteearfcn"});add(m,get("/api/net/current-plmn"),new String[]{"FullName","ShortName","Numeric","Rat","NetworkName","plmn"});add(m,get("/api/device/information"),new String[]{"DeviceName","SoftwareVersion","SerialNumber","Imei"});add(m,get("/api/monitoring/traffic-statistics"),new String[]{"CurrentDownloadRate","CurrentUploadRate","TotalDownload","TotalUpload","CurrentConnectTime"});add(m,get("/api/net/net-mode"),new String[]{"NetworkMode","LTEBand","NRBand","NetworkBand"});lastData=m;runOnUiThread(()->{dashboardWith(m);if(autoRefresh)refreshHandler.postDelayed(refreshLoop,1000);});}catch(Exception e){runOnUiThread(()->{toast("تعذر تحديث البيانات: "+e.getMessage());if(autoRefresh)refreshHandler.postDelayed(refreshLoop,1000);});}finally{refreshInFlight=false;}});
+    }
     private void add(Map<String,String>m,String x,String[]names){for(String n:names){String v=tag(x,n);if(!v.isEmpty())m.put(n,v);}}
     private String get(String p)throws Exception{return request("GET",p,null,false).body;}
     private String v(Map<String,String>m,String k,String d){String x=m.get(k);return x==null||x.trim().isEmpty()?d:x.trim();}
