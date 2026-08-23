@@ -115,7 +115,13 @@ public class MainActivity extends Activity {
         refreshInFlight=true;
         io.execute(()->{try{Map<String,String>m=new LinkedHashMap<>();add(m,get("/api/monitoring/status"),new String[]{"ConnectionStatus","CurrentNetworkType","CurrentNetworkTypeEx","SignalIcon","CurrentWifiUser"});add(m,get("/api/device/signal"),new String[]{"rsrp","rsrq","sinr","rssi","nrrsrp","nrrsrq","nrsinr","nrrssi","band","pci","scc_pci","cell_id","enodeb_id","nrearfcn","lteearfcn"});add(m,get("/api/net/current-plmn"),new String[]{"FullName","ShortName","Numeric","Rat","NetworkName","plmn"});add(m,get("/api/device/information"),new String[]{"DeviceName","SoftwareVersion","SerialNumber","Imei"});add(m,get("/api/monitoring/traffic-statistics"),new String[]{"CurrentDownloadRate","CurrentUploadRate","TotalDownload","TotalUpload","CurrentConnectTime"});add(m,get("/api/net/net-mode"),new String[]{"NetworkMode","LTEBand","NRBand","NetworkBand"});lastData=m;runOnUiThread(()->{dashboardWith(m);if(autoRefresh)refreshHandler.postDelayed(refreshLoop,1000);});}catch(Exception e){runOnUiThread(()->{toast("تعذر تحديث البيانات: "+e.getMessage());if(autoRefresh)refreshHandler.postDelayed(refreshLoop,1000);});}finally{refreshInFlight=false;}});
     }
-    private void add(Map<String,String>m,String x,String[]names){for(String n:names){String v=tag(x,n);if(!v.isEmpty())m.put(n,v);}}
+    private void add(Map<String,String>m,String x,String[]names){for(String n:names){String v=tagCI(x,n);if(!v.isEmpty())m.put(n,v);}}
+    private String tagCI(String xml,String name){
+        if(xml==null||xml.isEmpty()||name==null)return "";
+        try{Pattern p=Pattern.compile("<\\s*"+Pattern.quote(name)+"\\s*>(.*?)</\\s*"+Pattern.quote(name)+"\\s*>",Pattern.CASE_INSENSITIVE|Pattern.DOTALL);Matcher q=p.matcher(xml);if(q.find())return q.group(1).trim();}
+        catch(Exception ignored){}
+        return "";
+    }
     private String get(String p)throws Exception{return request("GET",p,null,false).body;}
     private String v(Map<String,String>m,String k,String d){String x=m.get(k);return x==null||x.trim().isEmpty()?d:x.trim();}
 
