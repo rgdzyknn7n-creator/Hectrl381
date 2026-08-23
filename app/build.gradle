@@ -8,7 +8,30 @@ android {
         applicationId 'com.hectrl381.router'
         minSdk 23
         targetSdk 35
-        versionCode 4
-        versionName '4.0'
+        versionCode 5
+        versionName '5.0'
     }
 }
+
+// Huawei HiLink/H158-381 requires an XML POST content type and a fresh
+// web-session bootstrap before requesting SesTokInfo. Apply the fix at build
+// time so the existing native API implementation is patched without mocks.
+tasks.register("patchHuaweiLogin") {
+    doLast {
+        def f = file("src/main/java/com/hectrl381/router/MainActivity.java")
+        def s = f.getText("UTF-8")
+
+        s = s.replace(
+            'c.setRequestProperty("Content-Type","application/x-www-form-urlencoded; charset=UTF-8");',
+            'c.setRequestProperty("Content-Type","text/xml; charset=UTF-8");'
+        )
+
+        def old = 'cookie=""; token=""; tokenOne=""; tokenTwo="";\n        HttpResult r=request("GET","/api/webserver/SesTokInfo",null,false);'
+        def fixed = 'cookie=""; token=""; tokenOne=""; tokenTwo="";\n        request("GET","/",null,false);\n        HttpResult r=request("GET","/api/webserver/SesTokInfo",null,false);'
+        s = s.replace(old, fixed)
+
+        f.write(s, "UTF-8")
+    }
+}
+
+tasks.named("preBuild").configure { dependsOn("patchHuaweiLogin") }
