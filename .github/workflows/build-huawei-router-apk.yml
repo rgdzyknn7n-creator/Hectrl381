@@ -19,7 +19,7 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: 'platforms;android-35 build-tools;35.0.0'
 
@@ -27,6 +27,76 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+
+      - name: Fix live router refresh
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('app/src/main/java/com/hectrl381/router/MainActivity.java')
+          s = p.read_text(encoding='utf-8')
+
+          new_refresh = r'''private void startAutoRefresh(){
+              autoRefresh=true;
+              refreshHandler.removeCallbacks(refreshLoop);
+              refreshHandler.post(refreshLoop);
+          }
+          private void stopAutoRefresh(){
+              autoRefresh=false;
+              refreshHandler.removeCallbacks(refreshLoop);
+          }
+          private void refreshData(){
+              if(refreshInFlight)return;
+              refreshInFlight=true;
+              io.execute(()->{
+                  try{
+                      Map<String,String> m = new LinkedHashMap<>(lastData);
+
+                      // Only poll values that actually change. The previous build requested
+                      // six endpoints sequentially, which could take longer than one second.
+                      add(m,get("/api/monitoring/status"),new String[]{
+                              "ConnectionStatus","CurrentNetworkType","CurrentNetworkTypeEx",
+                              "SignalIcon","CurrentWifiUser"});
+                      add(m,get("/api/device/signal"),new String[]{
+                              "rsrp","rsrq","sinr","rssi","nrrsrp","nrrsrq","nrsinr","nrrssi",
+                              "band","pci","scc_pci","cell_id","enodeb_id","nrearfcn","lteearfcn"});
+                      add(m,get("/api/monitoring/traffic-statistics"),new String[]{
+                              "CurrentDownloadRate","CurrentUploadRate","TotalDownload","TotalUpload",
+                              "CurrentConnectTime"});
+
+                      lastData=m;
+                      runOnUiThread(()->{
+                          dashboardWith(m);
+                          if(autoRefresh)refreshHandler.postDelayed(refreshLoop,1000);
+                      });
+                  }catch(Exception e){
+                      runOnUiThread(()->{
+                          if(autoRefresh)refreshHandler.postDelayed(refreshLoop,1000);
+                      });
+                  }finally{
+                      refreshInFlight=false;
+                  }
+              });
+          }
+          private void add'''
+
+          pattern = re.compile(r'private void startAutoRefresh\(\).*?private void add\(', re.S)
+          s, n = pattern.subn(new_refresh, s, count=1)
+          if n != 1:
+              raise SystemExit('refresh block not found')
+
+          # Send the current verification token on GETs too. Some H158-381 firmware
+          # rotates/validates the token between API requests.
+          old = 'if(write){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/x-www-form-urlencoded; charset=UTF-8");if(!token.isEmpty())c.setRequestProperty("__RequestVerificationToken",firstToken(token));}'
+          new = 'if(!token.isEmpty())c.setRequestProperty("__RequestVerificationToken",firstToken(token));if(write){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/x-www-form-urlencoded; charset=UTF-8");}'
+          if old not in s:
+              raise SystemExit('request token block not found')
+          s = s.replace(old,new,1)
+
+          p.write_text(s,encoding='utf-8')
+          PY
 
       - name: Build real Android APK
         shell: bash
@@ -36,5 +106,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Huawei-Router-Manager-v5
+          name: Huawei-Router-Manager-v6
           path: app/build/outputs/apk/debug/app-debug.apk
