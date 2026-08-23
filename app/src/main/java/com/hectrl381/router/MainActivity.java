@@ -40,7 +40,7 @@ import javax.crypto.spec.SecretKeySpec;
 public class MainActivity extends Activity {
     private final java.util.concurrent.ExecutorService io = java.util.concurrent.Executors.newSingleThreadExecutor();
     private String router = "192.168.8.1", username = "admin", password = "";
-    private String cookie = "", token = "";
+    private String cookie = "", token = "", tokenOne = "", tokenTwo = "";
     private EditText ipInput, userInput, passInput;
 
     private int dp(int n) { return (int)(n * getResources().getDisplayMetrics().density + .5f); }
@@ -56,34 +56,128 @@ public class MainActivity extends Activity {
         LinearLayout root=new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL); root.setGravity(Gravity.CENTER_HORIZONTAL); root.setPadding(dp(22),dp(30),dp(22),dp(22)); root.setBackgroundColor(Color.rgb(7,11,16));
         root.addView(tv("📡 Huawei Router Manager",27),new LinearLayout.LayoutParams(-1,dp(65)));
         root.addView(tv("H158-381 • تحكم فعلي عبر API المحلي",15),new LinearLayout.LayoutParams(-1,dp(55)));
-        ipInput=field("عنوان الراوتر",router); root.addView(ipInput); userInput=field("اسم المستخدم",username); root.addView(userInput); passInput=field("كلمة مرور الإدارة",""); passInput.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD); root.addView(passInput);
+        ipInput=field("عنوان الراوتر",router); root.addView(ipInput);
+        userInput=field("اسم المستخدم",username); root.addView(userInput);
+        passInput=field("كلمة مرور الإدارة",""); passInput.setInputType(InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD); root.addView(passInput);
         Button connect=btn("🔐 اتصال وتسجيل دخول"); connect.setOnClickListener(v->connect()); root.addView(connect);
         TextView hint=tv("يتم الاتصال مباشرة بالراوتر. كلمة المرور لا تغادر الجهاز.",13); hint.setTextColor(Color.LTGRAY); root.addView(hint); setContentView(root);
     }
     private EditText field(String hint,String value) { EditText e=new EditText(this); e.setHint(hint); e.setText(value); e.setSingleLine(true); e.setTextColor(Color.WHITE); e.setHintTextColor(Color.GRAY); e.setPadding(dp(14),0,dp(14),0); LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(55)); p.setMargins(0,dp(6),0,dp(6)); e.setLayoutParams(p); return e; }
 
     private void connect() {
-        router=ipInput.getText().toString().trim().replaceFirst("^https?://",""); if(router.endsWith("/"))router=router.substring(0,router.length()-1); username=userInput.getText().toString().trim(); password=passInput.getText().toString();
-        if(router.isEmpty()){toast("اكتب عنوان الراوتر");return;} setContentView(tv("جاري الاتصال بالراوتر...",16));
-        io.execute(()->{try{getSession(); if(!password.isEmpty())login(); runOnUiThread(this::dashboard); refreshData();}catch(Exception e){runOnUiThread(()->{loginScreen();toast("فشل الاتصال: "+e.getMessage());});}});
+        router=ipInput.getText().toString().trim().replaceFirst("^https?://",""); if(router.endsWith("/"))router=router.substring(0,router.length()-1);
+        username=userInput.getText().toString().trim(); password=passInput.getText().toString();
+        if(router.isEmpty()){toast("اكتب عنوان الراوتر");return;}
+        setContentView(tv("جاري الاتصال بالراوتر...",16));
+        io.execute(()->{try{
+            if(password.isEmpty()) throw new Exception("أدخل كلمة مرور الإدارة");
+            login();
+            runOnUiThread(this::dashboard);
+            refreshData();
+        }catch(Exception e){runOnUiThread(()->{loginScreen();toast("فشل تسجيل الدخول: "+e.getMessage());});}});
     }
     private String base(){return "http://"+router;}
 
-    private void getSession() throws Exception {
-        HttpResult r=request("GET","/api/webserver/SesTokInfo",null,false); String ses=tag(r.body,"SesInfo"), tok=tag(r.body,"TokInfo");
-        if(!ses.isEmpty())cookie=ses.contains("=")?ses:"SessionID="+ses; if(!tok.isEmpty())token=tok; if(cookie.isEmpty())throw new Exception("لم يتم الحصول على SessionID");
-    }
-    private void login() throws Exception {
-        String first=randomHex(32); String challenge="<?xml version=\"1.0\" encoding=\"UTF-8\"?><request><username>"+xml(username)+"</username><firstnonce>"+first+"</firstnonce><mode>1</mode></request>";
-        HttpResult c=request("POST","/api/user/challenge_login",challenge,true); String salt=tag(c.body,"salt"), server=tag(c.body,"servernonce"); int iterations=parseInt(tag(c.body,"iterations"),1000);
-        if(salt.isEmpty()||server.isEmpty())throw new Exception("الراوتر رفض تسجيل الدخول");
-        byte[] salted=pbkdf2(password,hexToBytes(salt),iterations), clientKey=hmac(salted,"Client Key"), stored=sha256(clientKey), sig=hmac(stored,first+","+server+","+server), proof=new byte[clientKey.length];
-        for(int i=0;i<clientKey.length;i++)proof[i]=(byte)(clientKey[i]^sig[i]);
-        String body="<?xml version=\"1.0\" encoding=\"UTF-8\"?><request><clientproof>"+hex(proof)+"</clientproof><finalnonce>"+xml(server)+"</finalnonce></request>";
-        HttpResult l=request("POST","/api/user/authentication_login",body,true); if(l.code>=400||l.body.contains("<error>"))throw new Exception("كلمة المرور غير صحيحة أو غير مدعومة"); if(l.setCookie!=null&&!l.setCookie.isEmpty())cookie=l.setCookie.split(";",2)[0]; getSession();
+    /* Huawei WebUI 10.x uses a session cookie plus a 32-character request token.
+       The token returned by SesTokInfo/webserver/token must not be sent in full. */
+    private void initSession() throws Exception {
+        cookie=""; token=""; tokenOne=""; tokenTwo="";
+        HttpResult r=request("GET","/api/webserver/SesTokInfo",null,false);
+        String ses=tag(r.body,"SesInfo");
+        String tok=tag(r.body,"TokInfo");
+        if(!ses.isEmpty()) cookie=ses.startsWith("SessionID=")?ses:"SessionID="+ses;
+        if(tok.length()>32) token=tok.substring(tok.length()-32); else token=tok;
+        if(cookie.isEmpty()) throw new Exception("لم يتم الحصول على SessionID");
+        if(token.isEmpty()) {
+            HttpResult t=request("GET","/api/webserver/token",null,false);
+            String full=tag(t.body,"token");
+            if(full.length()>32) token=full.substring(full.length()-32); else token=full;
+        }
+        if(token.isEmpty()) throw new Exception("لم يتم الحصول على رمز الدخول");
     }
 
-    private void refreshData(){io.execute(()->{try{Map<String,String>m=new LinkedHashMap<>(); add(m,get("/api/monitoring/status"),new String[]{"ConnectionStatus","CurrentNetworkType","CurrentNetworkTypeEx","SignalIcon","CurrentWifiUser"}); add(m,get("/api/device/signal"),new String[]{"rsrp","rsrq","sinr","rssi","nrrsrp","nrrsrq","nrsinr","nrrssi","band","pci","scc_pci","cell_id","enodeb_id","nrearfcn","lteearfcn"}); add(m,get("/api/net/current-plmn"),new String[]{"FullName","ShortName","Numeric","Rat","NetworkName","plmn"}); add(m,get("/api/device/information"),new String[]{"DeviceName","SoftwareVersion","SerialNumber","Imei"}); add(m,get("/api/monitoring/traffic-statistics"),new String[]{"CurrentDownloadRate","CurrentUploadRate","TotalDownload","TotalUpload","CurrentConnectTime"}); add(m,get("/api/net/net-mode"),new String[]{"NetworkMode","LTEBand","NRBand","NetworkBand"}); runOnUiThread(()->dashboardWith(m));}catch(Exception e){runOnUiThread(()->toast("تعذر تحديث البيانات: "+e.getMessage()));}});}
+    private void login() throws Exception {
+        Exception last=null;
+        for(int attempt=0;attempt<2;attempt++) {
+            try {
+                initSession();
+                HttpResult state=request("GET","/api/user/state-login",null,false);
+                String st=tag(state.body,"State"); if(st.isEmpty()) st=tag(state.body,"state");
+                if("0".equals(st) && username.equalsIgnoreCase(firstNonEmpty(tag(state.body,"Username"),tag(state.body,"username")))) return;
+                try { scramLogin(); verifyLoggedIn(); return; }
+                catch(Exception scramError) {
+                    last=scramError;
+                    String msg=scramError.getMessage()==null?"":scramError.getMessage();
+                    if(msg.contains("125003") || msg.contains("رمز الجلسة") || msg.contains("token")) continue;
+                    // Some Huawei firmwares expose the older /api/user/login flow.
+                    try { legacyLogin(); verifyLoggedIn(); return; } catch(Exception legacyError) { last=legacyError; }
+                    if(msg.contains("108001") || msg.contains("108002") || msg.contains("108006")) throw scramError;
+                }
+            } catch(Exception e) { last=e; if(e.getMessage()!=null && e.getMessage().contains("125003")) continue; }
+        }
+        if(last!=null) throw last; throw new Exception("تعذر تسجيل الدخول");
+    }
+
+    private void scramLogin() throws Exception {
+        String first=randomHex(32);
+        String challenge="<?xml version=\"1.0\" encoding=\"UTF-8\"?><request><username>"+xml(username)+"</username><firstnonce>"+first+"</firstnonce><mode>1</mode></request>";
+        HttpResult c=request("POST","/api/user/challenge_login",challenge,true);
+        String err=errorCode(c.body); if(!err.isEmpty()) throw new Exception("رمز الراوتر "+err);
+        String salt=tag(c.body,"salt"), server=tag(c.body,"servernonce");
+        int iterations=parseInt(tag(c.body,"iterations"),1000);
+        if(salt.isEmpty()||server.isEmpty()) throw new Exception("الراوتر لم يعطِ بيانات challenge_login");
+        byte[] salted=pbkdf2(password,hexToBytes(salt),iterations);
+        byte[] clientKey=hmac(salted,"Client Key");
+        byte[] stored=sha256(clientKey);
+        byte[] sig=hmac(stored,first+","+server+","+server);
+        byte[] proof=new byte[clientKey.length];
+        for(int i=0;i<clientKey.length;i++) proof[i]=(byte)(clientKey[i]^sig[i]);
+        String body="<?xml version=\"1.0\" encoding=\"UTF-8\"?><request><clientproof>"+hex(proof)+"</clientproof><finalnonce>"+xml(server)+"</finalnonce></request>";
+        HttpResult l=request("POST","/api/user/authentication_login",body,true);
+        err=errorCode(l.body);
+        if(!err.isEmpty()) throw new Exception("رمز الراوتر "+err+" (قد يكون رمز الجلسة أو بيانات الدخول)");
+        if(l.code>=400) throw new Exception("فشل authentication_login HTTP "+l.code);
+        if(l.setCookie!=null&&!l.setCookie.isEmpty()) cookie=l.setCookie.split(";",2)[0];
+        captureTokens(l);
+    }
+
+    private void legacyLogin() throws Exception {
+        if(token.isEmpty()) throw new Exception("لا يوجد رمز دخول");
+        String hashed=base64Sha256(hexSha256(password));
+        String passwordValue=base64Sha256(username+hashed+token);
+        String body="<?xml version=\"1.0\" encoding=\"UTF-8\"?><request><Username>"+xml(username)+"</Username><Password>"+passwordValue+"</Password><password_type>4</password_type></request>";
+        HttpResult r=request("POST","/api/user/login",body,true);
+        String err=errorCode(r.body); if(!err.isEmpty()) throw new Exception("رمز الراوتر "+err);
+        if(!r.body.contains("OK") && r.code>=400) throw new Exception("فشل تسجيل الدخول القديم HTTP "+r.code);
+        if(r.setCookie!=null&&!r.setCookie.isEmpty()) cookie=r.setCookie.split(";",2)[0];
+        captureTokens(r);
+    }
+
+    private void verifyLoggedIn() throws Exception {
+        HttpResult r=request("GET","/api/user/state-login",null,false);
+        String state=firstNonEmpty(tag(r.body,"State"),tag(r.body,"state"));
+        String u=firstNonEmpty(tag(r.body,"Username"),tag(r.body,"username"));
+        if(!"0".equals(state) || (u.isEmpty() || !username.equalsIgnoreCase(u))) {
+            String err=errorCode(r.body); throw new Exception(err.isEmpty()?"الراوتر لم يؤكد تسجيل الدخول":"رمز الراوتر "+err);
+        }
+    }
+
+    private void captureTokens(HttpResult r) {
+        if(r.tokenHeader!=null&&!r.tokenHeader.isEmpty()) token=r.tokenHeader;
+        if(r.tokenOne!=null&&!r.tokenOne.isEmpty()) tokenOne=r.tokenOne;
+        if(r.tokenTwo!=null&&!r.tokenTwo.isEmpty()) tokenTwo=r.tokenTwo;
+    }
+
+    private void refreshData(){io.execute(()->{try{
+        Map<String,String>m=new LinkedHashMap<>();
+        add(m,get("/api/monitoring/status"),new String[]{"ConnectionStatus","CurrentNetworkType","CurrentNetworkTypeEx","SignalIcon","CurrentWifiUser"});
+        add(m,get("/api/device/signal"),new String[]{"rsrp","rsrq","sinr","rssi","nrrsrp","nrrsrq","nrsinr","nrrssi","band","pci","scc_pci","cell_id","enodeb_id","nrearfcn","lteearfcn"});
+        add(m,get("/api/net/current-plmn"),new String[]{"FullName","ShortName","Numeric","Rat","NetworkName","plmn"});
+        add(m,get("/api/device/information"),new String[]{"DeviceName","SoftwareVersion","SerialNumber","Imei"});
+        add(m,get("/api/monitoring/traffic-statistics"),new String[]{"CurrentDownloadRate","CurrentUploadRate","TotalDownload","TotalUpload","CurrentConnectTime"});
+        add(m,get("/api/net/net-mode"),new String[]{"NetworkMode","LTEBand","NRBand","NetworkBand"});
+        runOnUiThread(()->dashboardWith(m));
+    }catch(Exception e){runOnUiThread(()->toast("تعذر تحديث البيانات: "+e.getMessage()));}});}
     private void add(Map<String,String>m,String xml,String[]names){for(String n:names){String v=tag(xml,n);if(!v.isEmpty())m.put(n,v);}}
     private String get(String p)throws Exception{return request("GET",p,null,false).body;}
 
@@ -95,7 +189,7 @@ public class MainActivity extends Activity {
         c=card();c.addView(tv("🌐 الشبكة",19));c.addView(value("نوع الاتصال",v(m,"CurrentNetworkTypeEx",v(m,"CurrentNetworkType","—"))));c.addView(value("المشغل",v(m,"FullName",v(m,"NetworkName","—"))));c.addView(value("المستخدمون المتصلون",v(m,"CurrentWifiUser","—")));root.addView(c);
         c=card();c.addView(tv("📊 السرعة والبيانات",19));c.addView(value("Download / Upload",rate(v(m,"CurrentDownloadRate","—"))+" / "+rate(v(m,"CurrentUploadRate","—"))));c.addView(value("إجمالي التنزيل / الرفع",bytes(v(m,"TotalDownload","—"))+" / "+bytes(v(m,"TotalUpload","—"))));root.addView(c);
         c=card();c.addView(tv("🔧 التحكم الفعلي",19));Button b=btn("🔄 تحديث البيانات");b.setOnClickListener(x->refreshData());c.addView(b);b=btn("📡 قفل/تحديد 4G و 5G Bands");b.setOnClickListener(x->bandDialog());c.addView(b);b=btn("🔁 إعادة الاتصال بالشبكة");b.setOnClickListener(x->action("/api/net/reconnect","<request><ReconnectAction>1</ReconnectAction></request>","تم طلب إعادة الاتصال"));c.addView(b);b=btn("♻️ إعادة تشغيل الراوتر");b.setOnClickListener(x->confirmReboot());c.addView(b);b=btn("🌐 واجهة Huawei الأصلية");b.setOnClickListener(x->startActivity(new Intent(Intent.ACTION_VIEW,Uri.parse(base()+"/"))));c.addView(b);root.addView(c);
-        TextView note=tv("الأوامر تُرسل إلى API الراوتر مباشرة. إذا كان Firmware يمنع وظيفة معينة سيظهر رفض الراوتر ولن يتم تنفيذ أمر وهمي.",12);note.setTextColor(Color.LTGRAY);root.addView(note);scroll.addView(root);setContentView(scroll);
+        TextView note=tv("الأوامر تُرسل إلى API الراوتر مباشرة. إذا رفض Firmware وظيفة معينة سيظهر رمز الراوتر ولن يتم تنفيذ أمر وهمي.",12);note.setTextColor(Color.LTGRAY);root.addView(note);scroll.addView(root);setContentView(scroll);
     }
     private String v(Map<String,String>m,String k,String d){String x=m.get(k);return x==null||x.isEmpty()?d:x;}
     private String rate(String s){try{double x=Double.parseDouble(s);if(x>1000000)return String.format(Locale.US,"%.2f Mbps",x/1000000d);if(x>1000)return String.format(Locale.US,"%.2f Mbps",x/1000d);return s;}catch(Exception e){return s;}}
@@ -110,22 +204,36 @@ public class MainActivity extends Activity {
     }
     private boolean maskHas(String mask,int band){try{return mask!=null&&!mask.isEmpty()&&new java.math.BigInteger(mask,16).testBit(band-1);}catch(Exception e){return false;}}
     private String mask(List<CheckBox>b,int[]bands){java.math.BigInteger x=java.math.BigInteger.ZERO;for(int i=0;i<bands.length;i++)if(b.get(i).isChecked())x=x.setBit(bands[i]-1);return x.toString(16).toUpperCase(Locale.US);}
-    private void applyBands(String lte,String nr){io.execute(()->{try{String cur=get("/api/net/net-mode"),nb=tag(cur,"NetworkBand"),mode=tag(cur,"NetworkMode");if(nb.isEmpty())nb="3FFFFFFFFFFFFFFF";if(mode.isEmpty())mode="00";String body="<?xml version=\"1.0\" encoding=\"UTF-8\"?><request><NetworkMode>"+mode+"</NetworkMode><NetworkBand>"+nb+"</NetworkBand><LTEBand>"+lte+"</LTEBand><NRBand>"+nr+"</NRBand></request>";HttpResult r=request("POST","/api/net/net-mode",body,true);if(r.code>=400||r.body.contains("<error>"))throw new Exception("الراوتر رفض الأمر: "+tag(r.body,"code"));runOnUiThread(()->{toast("تم إرسال إعدادات الباندات");refreshData();});}catch(Exception e){runOnUiThread(()->toast(e.getMessage()));}});}
+    private void applyBands(String lte,String nr){io.execute(()->{try{String cur=get("/api/net/net-mode"),nb=tag(cur,"NetworkBand"),mode=tag(cur,"NetworkMode");if(nb.isEmpty())nb="3FFFFFFFFFFFFFFF";if(mode.isEmpty())mode="00";String body="<?xml version=\"1.0\" encoding=\"UTF-8\"?><request><NetworkMode>"+mode+"</NetworkMode><NetworkBand>"+nb+"</NetworkBand><LTEBand>"+lte+"</LTEBand><NRBand>"+nr+"</NRBand></request>";HttpResult r=request("POST","/api/net/net-mode",body,true);String err=errorCode(r.body);if(!err.isEmpty())throw new Exception("الراوتر رفض الأمر: "+err);runOnUiThread(()->{toast("تم إرسال إعدادات الباندات");refreshData();});}catch(Exception e){runOnUiThread(()->toast(e.getMessage()));}});}
     private void confirmReboot(){new AlertDialog.Builder(this).setTitle("إعادة تشغيل الراوتر؟").setMessage("سيقطع الاتصال لعدة دقائق.").setNegativeButton("إلغاء",null).setPositiveButton("إعادة التشغيل",(d,w)->action("/api/device/control","<request><Control>1</Control></request>","تم إرسال أمر إعادة التشغيل")).show();}
-    private void action(String path,String body,String ok){io.execute(()->{try{HttpResult r=request("POST",path,body,true);if(r.code>=400||r.body.contains("<error>"))throw new Exception("الراوتر رفض الأمر: "+tag(r.body,"code"));runOnUiThread(()->toast(ok));}catch(Exception e){runOnUiThread(()->toast("فشل الأمر: "+e.getMessage()));}});}
+    private void action(String path,String body,String ok){io.execute(()->{try{HttpResult r=request("POST",path,body,true);String err=errorCode(r.body);if(!err.isEmpty())throw new Exception("الراوتر رفض الأمر: "+err);runOnUiThread(()->toast(ok));}catch(Exception e){runOnUiThread(()->toast("فشل الأمر: "+e.getMessage()));}});}
 
-    private HttpResult request(String method,String path,String body,boolean write)throws Exception{HttpURLConnection c=(HttpURLConnection)new URL(base()+path).openConnection();c.setConnectTimeout(7000);c.setReadTimeout(10000);c.setRequestMethod(method);c.setUseCaches(false);c.setRequestProperty("X-Requested-With","XMLHttpRequest");c.setRequestProperty("Accept","*/*");if(!cookie.isEmpty())c.setRequestProperty("Cookie",cookie);if(write){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/xml; charset=UTF-8");if(!token.isEmpty())c.setRequestProperty("__RequestVerificationToken",token);}if(body!=null){c.getOutputStream().write(body.getBytes(StandardCharsets.UTF_8));c.getOutputStream().close();}int code=c.getResponseCode();String nt=c.getHeaderField("__RequestVerificationToken");if(nt!=null&&!nt.isEmpty())token=nt;String sc=c.getHeaderField("Set-Cookie");if(sc!=null&&!sc.isEmpty())cookie=sc.split(";",2)[0];InputStream in=code>=400?c.getErrorStream():c.getInputStream();String text=read(in);c.disconnect();return new HttpResult(code,text,sc);}
+    private HttpResult request(String method,String path,String body,boolean write)throws Exception{
+        HttpURLConnection c=(HttpURLConnection)new URL(base()+path).openConnection();c.setConnectTimeout(7000);c.setReadTimeout(10000);c.setRequestMethod(method);c.setUseCaches(false);c.setRequestProperty("X-Requested-With","XMLHttpRequest");c.setRequestProperty("Accept","*/*");c.setRequestProperty("Referer",base()+"/");
+        if(!cookie.isEmpty())c.setRequestProperty("Cookie",cookie);
+        if(write){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/x-www-form-urlencoded; charset=UTF-8");if(!token.isEmpty())c.setRequestProperty("__RequestVerificationToken",token);}
+        if(body!=null){c.getOutputStream().write(body.getBytes(StandardCharsets.UTF_8));c.getOutputStream().close();}
+        int code=c.getResponseCode();
+        String nt=c.getHeaderField("__RequestVerificationToken");String n1=c.getHeaderField("__RequestVerificationTokenone");String n2=c.getHeaderField("__RequestVerificationTokentwo");
+        if(nt!=null&&!nt.isEmpty())token=nt;if(n1!=null&&!n1.isEmpty())tokenOne=n1;if(n2!=null&&!n2.isEmpty())tokenTwo=n2;
+        String sc=c.getHeaderField("Set-Cookie");if(sc!=null&&!sc.isEmpty())cookie=sc.split(";",2)[0];
+        InputStream in=code>=400?c.getErrorStream():c.getInputStream();String text=read(in);c.disconnect();return new HttpResult(code,text,sc,nt,n1,n2);
+    }
     private String read(InputStream in)throws Exception{if(in==null)return"";BufferedReader r=new BufferedReader(new InputStreamReader(in,StandardCharsets.UTF_8));StringBuilder b=new StringBuilder();String s;while((s=r.readLine())!=null)b.append(s);r.close();return b.toString();}
-    private static class HttpResult{int code;String body,setCookie;HttpResult(int c,String b,String s){code=c;body=b;setCookie=s;}}
-    private static String tag(String xml,String name){if(xml==null)return"";Matcher m=Pattern.compile("<"+Pattern.quote(name)+">(.*?)</"+Pattern.quote(name)+">",Pattern.DOTALL).matcher(xml);return m.find()?m.group(1).trim():"";}
+    private static class HttpResult{int code;String body,setCookie,tokenHeader,tokenOne,tokenTwo;HttpResult(int c,String b,String s,String t,String o,String w){code=c;body=b;setCookie=s;tokenHeader=t;tokenOne=o;tokenTwo=w;}}
+    private static String tag(String xml,String name){if(xml==null)return"";Matcher m=Pattern.compile("<"+Pattern.quote(name)+">(.*?)</"+Pattern.quote(name)+">",Pattern.DOTALL|Pattern.CASE_INSENSITIVE).matcher(xml);return m.find()?m.group(1).trim():"";}
+    private static String errorCode(String xml){String c=tag(xml,"code");return c.isEmpty()?"":c;}
+    private static String firstNonEmpty(String a,String b){return a!=null&&!a.isEmpty()?a:(b==null?"":b);}
     private static String xml(String s){return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;").replace("'","&apos;");}
     private static int parseInt(String s,int d){try{return Integer.parseInt(s);}catch(Exception e){return d;}}
     private static String randomHex(int n){byte[]b=new byte[n];new SecureRandom().nextBytes(b);return hex(b);}
     private static byte[]hexToBytes(String s){if(s.length()%2!=0)throw new IllegalArgumentException("salt غير صالح");byte[]r=new byte[s.length()/2];for(int i=0;i<r.length;i++)r[i]=(byte)Integer.parseInt(s.substring(i*2,i*2+2),16);return r;}
     private static String hex(byte[]b){StringBuilder s=new StringBuilder();for(byte x:b)s.append(String.format(Locale.US,"%02x",x&255));return s.toString();}
     private static byte[]sha256(byte[]b)throws Exception{return MessageDigest.getInstance("SHA-256").digest(b);}
+    private static String hexSha256(String s)throws Exception{return hex(sha256(s.getBytes(StandardCharsets.UTF_8)));}
     private static byte[]hmac(byte[]key,String msg)throws Exception{Mac m=Mac.getInstance("HmacSHA256");m.init(new SecretKeySpec(key,"HmacSHA256"));return m.doFinal(msg.getBytes(StandardCharsets.UTF_8));}
     private static byte[]pbkdf2(String pass,byte[]salt,int it)throws Exception{PBEKeySpec s=new PBEKeySpec(pass.toCharArray(),salt,it,256);try{return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(s).getEncoded();}finally{s.clearPassword();}}
+    private static String base64Sha256(String s)throws Exception{byte[]d=sha256(s.getBytes(StandardCharsets.UTF_8));String h=hex(d);return android.util.Base64.encodeToString(h.getBytes(StandardCharsets.UTF_8),android.util.Base64.NO_WRAP|android.util.Base64.URL_SAFE);}
     private void toast(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
     @Override public void onBackPressed(){loginScreen();}
 }
