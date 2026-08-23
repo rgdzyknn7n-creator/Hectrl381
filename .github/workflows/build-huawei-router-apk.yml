@@ -32,6 +32,10 @@ jobs:
         shell: bash
         run: python3 scripts/fix_h158_381_login.py
 
+      - name: Persist login and improve H158-381 readings
+        shell: bash
+        run: python3 scripts/fix_session_readings.py
+
       - name: Build real Android APK
         shell: bash
         run: gradle --no-daemon :app:assembleDebug
@@ -39,5 +43,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Huawei-Router-Manager-v9
+          name: Huawei-Router-Manager-v10
           path: app/build/outputs/apk/debug/app-debug.apk
