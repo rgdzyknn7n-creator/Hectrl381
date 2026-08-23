@@ -2,6 +2,8 @@ name: Build Huawei Router Manager APK
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
 
 jobs:
   build:
@@ -133,7 +135,6 @@ jobs:
           import android.graphics.Color;
           import android.os.Bundle;
           import android.view.Gravity;
-          import android.view.View;
           import android.view.ViewGroup;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
@@ -146,7 +147,6 @@ jobs:
           public class MainActivity extends Activity {
               private WebView webView;
               private EditText ipInput;
-              private LinearLayout home;
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
@@ -183,20 +183,17 @@ jobs:
               }
 
               private void showHome() {
-                  home = new LinearLayout(this);
+                  LinearLayout home = new LinearLayout(this);
                   home.setOrientation(LinearLayout.VERTICAL);
                   home.setGravity(Gravity.CENTER_HORIZONTAL);
                   home.setPadding(dp(20), dp(24), dp(20), dp(20));
                   home.setBackgroundColor(Color.rgb(11,15,20));
 
-                  TextView title = label("📡 Huawei Router Manager", 25);
-                  home.addView(title, new LinearLayout.LayoutParams(
-                          ViewGroup.LayoutParams.MATCH_PARENT, dp(70)));
-
+                  home.addView(label("📡 Huawei Router Manager", 25),
+                          new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(70)));
                   TextView sub = label("H158-381 • تحكم متقدم بالراوتر", 17);
                   sub.setTextColor(Color.LTGRAY);
-                  home.addView(sub, new LinearLayout.LayoutParams(
-                          ViewGroup.LayoutParams.MATCH_PARENT, dp(55)));
+                  home.addView(sub, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(55)));
 
                   ipInput = new EditText(this);
                   ipInput.setSingleLine(true);
@@ -205,8 +202,7 @@ jobs:
                   ipInput.setHintTextColor(Color.GRAY);
                   ipInput.setHint("عنوان IP للراوتر");
                   ipInput.setGravity(Gravity.CENTER);
-                  home.addView(ipInput, new LinearLayout.LayoutParams(
-                          ViewGroup.LayoutParams.MATCH_PARENT, dp(60)));
+                  home.addView(ipInput, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(60)));
 
                   Button main = button("🌐 لوحة تحكم الراوتر");
                   main.setOnClickListener(v -> openPath("/"));
@@ -224,12 +220,10 @@ jobs:
                   wifi.setOnClickListener(v -> openPath("/"));
                   home.addView(wifi);
 
-                  TextView note = label(
-                          "مهم: يجب أن يكون الهاتف متصلًا بشبكة الراوتر.\\n" +
-                          "صفحة قفل الترددات تستخدم واجهة Huawei الأصلية، لذلك أي تغيير يتم تطبيقه مباشرة على الراوتر.", 14);
+                  TextView note = label("يجب أن يكون الهاتف متصلًا بشبكة الراوتر.\\n" +
+                          "قفل الترددات/الخلايا يتم من واجهة Huawei الأصلية ويُطبّق مباشرة على الراوتر.", 14);
                   note.setTextColor(Color.rgb(160,170,185));
-                  home.addView(note, new LinearLayout.LayoutParams(
-                          ViewGroup.LayoutParams.MATCH_PARENT, dp(110)));
+                  home.addView(note, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(100)));
 
                   setContentView(home);
               }
@@ -249,7 +243,6 @@ jobs:
                   s.setDatabaseEnabled(true);
                   s.setBuiltInZoomControls(false);
                   s.setDisplayZoomControls(false);
-                  s.setLoadsImagesAutomatically(true);
                   webView.setWebViewClient(new WebViewClient());
                   setContentView(webView);
                   webView.loadUrl(base() + path);
@@ -257,14 +250,12 @@ jobs:
 
               @Override
               public void onBackPressed() {
-                  if (webView != null) {
-                      if (webView.canGoBack()) {
-                          webView.goBack();
-                          return;
-                      }
+                  if (webView != null && webView.canGoBack()) {
+                      webView.goBack();
+                  } else {
                       webView = null;
+                      showHome();
                   }
-                  showHome();
               }
           }
           EOF
