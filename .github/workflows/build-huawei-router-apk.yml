@@ -38,112 +38,115 @@ jobs:
           p = Path('app/src/main/java/com/hectrl381/router/MainActivity.java')
           s = p.read_text(encoding='utf-8')
 
-          # 1) Poll the signal endpoint first every cycle and keep a real 1-second UI loop.
+          # 1) Poll signal first and keep a real one-second refresh loop.
           refresh = r'''    private void refreshData(){
-              if(refreshInFlight)return;
-              refreshInFlight=true;
-              io.execute(()->{
-                  try{
-                      Map<String,String> m=new LinkedHashMap<>(lastData);
-                      add(m,get("/api/device/signal"),new String[]{"rsrp","rsrq","sinr","rssi","nrrsrp","nrrsrq","nrsinr","nrrssi","band","pci","scc_pci","cell_id","enodeb_id","nrearfcn","lteearfcn","earfcn","plmn"});
-                      add(m,get("/api/monitoring/status"),new String[]{"ConnectionStatus","CurrentNetworkType","CurrentNetworkTypeEx","SignalIcon","CurrentWifiUser"});
-                      add(m,get("/api/monitoring/traffic-statistics"),new String[]{"CurrentDownloadRate","CurrentUploadRate","TotalDownload","TotalUpload","CurrentConnectTime"});
-                      lastData=m;
-                      runOnUiThread(()->{dashboardWith(m);if(autoRefresh)refreshHandler.postDelayed(refreshLoop,1000);});
-                  }catch(Exception e){
-                      runOnUiThread(()->{if(autoRefresh)refreshHandler.postDelayed(refreshLoop,1000);});
-                  }finally{refreshInFlight=false;}
-              });
-          }
+        if(refreshInFlight)return;
+        refreshInFlight=true;
+        io.execute(()->{
+            try{
+                Map<String,String> m=new LinkedHashMap<>(lastData);
+                add(m,get("/api/device/signal"),new String[]{"rsrp","rsrq","sinr","rssi","nrrsrp","nrrsrq","nrsinr","nrrssi","band","pci","scc_pci","cell_id","enodeb_id","nrearfcn","lteearfcn","earfcn","plmn"});
+                add(m,get("/api/monitoring/status"),new String[]{"ConnectionStatus","CurrentNetworkType","CurrentNetworkTypeEx","SignalIcon","CurrentWifiUser"});
+                add(m,get("/api/monitoring/traffic-statistics"),new String[]{"CurrentDownloadRate","CurrentUploadRate","TotalDownload","TotalUpload","CurrentConnectTime"});
+                lastData=m;
+                runOnUiThread(()->{dashboardWith(m);if(autoRefresh)refreshHandler.postDelayed(refreshLoop,1000);});
+            }catch(Exception e){
+                runOnUiThread(()->{if(autoRefresh)refreshHandler.postDelayed(refreshLoop,1000);});
+            }finally{refreshInFlight=false;}
+        });
+    }
     private void add'''
           s,n=re.subn(r'    private void refreshData\(\).*?    private void add', refresh, s, count=1, flags=re.S)
           if n != 1: raise SystemExit('refresh block not found')
 
-          # 2) Replace the fragile custom gauge with reliable numeric signal cards.
+          # 2) Use reliable numeric signal cards instead of the custom gauge.
           signal = r'''        LinearLayout signal=panel();
-          signal.addView(tv("الإشارة والخلية  📶",19));
-          LinearLayout sr=row();
-          sr.addView(signalNumber("RSRP","قوة الإشارة",v(m,"rsrp","—"),"dBm",signalColorFor("RSRP",v(m,"rsrp",""))));
-          sr.addView(signalNumber("RSRQ","جودة الإشارة",v(m,"rsrq","—"),"dB",signalColorFor("RSRQ",v(m,"rsrq",""))));
-          sr.addView(signalNumber("SINR","جودة الاتصال",v(m,"sinr","—"),"dB",signalColorFor("SINR",v(m,"sinr",""))));
-          signal.addView(sr);
-          TextView five=tv("5G RSRP / RSRQ / SINR   "+v(m,"nrrsrp","—")+" / "+v(m,"nrrsrq","—")+" / "+v(m,"nrsinr","—"),13);
-          five.setTextColor(Color.LTGRAY);signal.addView(five);root.addView(signal);
+        signal.addView(tv("الإشارة والخلية  📶",19));
+        LinearLayout sr=row();
+        sr.addView(signalNumber("RSRP","قوة الإشارة",v(m,"rsrp","—"),"dBm",signalColorFor("RSRP",v(m,"rsrp",""))));
+        sr.addView(signalNumber("RSRQ","جودة الإشارة",v(m,"rsrq","—"),"dB",signalColorFor("RSRQ",v(m,"rsrq",""))));
+        sr.addView(signalNumber("SINR","جودة الاتصال",v(m,"sinr","—"),"dB",signalColorFor("SINR",v(m,"sinr",""))));
+        signal.addView(sr);
+        TextView five=tv("5G RSRP / RSRQ / SINR   "+v(m,"nrrsrp","—")+" / "+v(m,"nrrsrq","—")+" / "+v(m,"nrsinr","—"),13);
+        five.setTextColor(Color.LTGRAY);signal.addView(five);root.addView(signal);
 
-    '''
+'''
           s,n=re.subn(r'        LinearLayout signal=panel\(\);.*?        LinearLayout info=panel\(\);', signal+'        LinearLayout info=panel();', s, count=1, flags=re.S)
           if n != 1: raise SystemExit('signal block not found')
 
           helper = r'''    private LinearLayout signalNumber(String name,String label,String raw,String unit,int color){
-              LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setGravity(Gravity.CENTER);c.setPadding(dp(8),dp(12),dp(8),dp(12));c.setBackground(bg(Color.rgb(14,22,29),14));
-              TextView n=tv(name,15);n.setTextColor(color);n.setGravity(Gravity.CENTER);c.addView(n);
-              TextView l=tv(label,11);l.setTextColor(Color.LTGRAY);l.setGravity(Gravity.CENTER);c.addView(l);
-              TextView val=tv(formatSignalRaw(raw),21);val.setTextColor(Color.WHITE);val.setGravity(Gravity.CENTER);c.addView(val);
-              TextView u=tv(unit,10);u.setTextColor(Color.GRAY);u.setGravity(Gravity.CENTER);c.addView(u);
-              LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(125),1);p.setMargins(dp(4),dp(4),dp(4),dp(4));c.setLayoutParams(p);return c;
-          }
-          private String formatSignalRaw(String s){
-              if(s==null||s.trim().isEmpty()||s.equals("—"))return "—";
-              String x=s.trim().replace("−","-").replace("–","-").replace("&gt;=",">").replace("&lt;=","<");
-              return x.replace("dBm","").replace("dB","").trim();
-          }
-          private int signalColorFor(String name,String raw){
-              double x=parseDouble(raw,Double.NaN);if(Double.isNaN(x))return Color.GRAY;
-              if("RSRP".equals(name))return x>=-90?green():x>=-105?yellow():red();
-              if("RSRQ".equals(name))return x>=-10?green():x>=-15?yellow():red();
-              return x>=15?green():x>=5?yellow():red();
-          }
+        LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setGravity(Gravity.CENTER);c.setPadding(dp(8),dp(12),dp(8),dp(12));c.setBackground(bg(Color.rgb(14,22,29),14));
+        TextView n=tv(name,15);n.setTextColor(color);n.setGravity(Gravity.CENTER);c.addView(n);
+        TextView l=tv(label,11);l.setTextColor(Color.LTGRAY);l.setGravity(Gravity.CENTER);c.addView(l);
+        TextView val=tv(formatSignalRaw(raw),21);val.setTextColor(Color.WHITE);val.setGravity(Gravity.CENTER);c.addView(val);
+        TextView u=tv(unit,10);u.setTextColor(Color.GRAY);u.setGravity(Gravity.CENTER);c.addView(u);
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,dp(125),1);p.setMargins(dp(4),dp(4),dp(4),dp(4));c.setLayoutParams(p);return c;
+    }
+    private String formatSignalRaw(String s){
+        if(s==null||s.trim().isEmpty()||s.equals("—"))return "—";
+        String x=s.trim().replace("−","-").replace("–","-").replace("&gt;=",">").replace("&lt;=","<");
+        return x.replace("dBm","").replace("dB","").trim();
+    }
+    private int signalColorFor(String name,String raw){
+        double x=parseDouble(raw,Double.NaN);if(Double.isNaN(x))return Color.GRAY;
+        if("RSRP".equals(name))return x>=-90?green():x>=-105?yellow():red();
+        if("RSRQ".equals(name))return x>=-10?green():x>=-15?yellow():red();
+        return x>=15?green():x>=5?yellow():red();
+    }
 '''
           s,n=re.subn(r'    private void addGauge\(.*?\n    \}\n', helper, s, count=1, flags=re.S)
           if n != 1: raise SystemExit('gauge method not found')
 
-          # 3) Make the 4G/5G button actually read and write Huawei net-mode masks.
+          # 3) Make the 4G/5G control read and write Huawei band masks.
           band = r'''    private void bandDialog(){
-              io.execute(()->{
-                  try{
-                      String xml=get("/api/net/net-mode");
-                      String lte=tagCI(xml,"LTEBand"),nr=tagCI(xml,"NRBand"),mode=tagCI(xml,"NetworkMode");
-                      runOnUiThread(()->showBandEditor(lte,nr,mode));
-                  }catch(Exception e){runOnUiThread(()->toast("تعذر قراءة إعدادات الباند: "+e.getMessage()));}
-              });
-          }
-          private void showBandEditor(String lteMask,String nrMask,String mode){
-              LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(18),dp(4),dp(18),dp(4));
-              TextView h=tv("اكتب أرقام الباند مفصولة بـ +. مثال: 1+3+28.\\nاكتب AUTO لاستخدام جميع الباندات.",13);h.setTextColor(Color.LTGRAY);l.addView(h);
-              EditText lte=field("باندات 4G",maskToBands(lteMask,false));l.addView(lte);
-              EditText nr=field("باندات 5G",maskToBands(nrMask,true));l.addView(nr);
-              new AlertDialog.Builder(this).setTitle("إعدادات 4G / 5G").setView(l).setNegativeButton("إلغاء",null).setPositiveButton("تطبيق",(d,w)->applyBands(lte.getText().toString(),nr.getText().toString())).show();
-          }
-          private String maskToBands(String mask,boolean nr){
-              if(mask==null||mask.trim().isEmpty())return "AUTO";
-              String x=mask.trim();if(x.equalsIgnoreCase("7FFFFFFFFFFFFFFF")||x.equalsIgnoreCase("4000000000000000006"))return "AUTO";
-              try{java.math.BigInteger n=new java.math.BigInteger(x,16);StringBuilder b=new StringBuilder();for(int i=0;i<90;i++)if(n.testBit(i)){if(b.length()>0)b.append('+');b.append(i+1);}return b.length()>0?b.toString():"AUTO";}catch(Exception e){return "AUTO";}
-          }
-          private String bandsToMask(String bands,boolean nr){
-              String x=bands==null?"":bands.trim();if(x.isEmpty()||x.equalsIgnoreCase("AUTO"))return nr?"4000000000000000006":"7FFFFFFFFFFFFFFF";
-              java.math.BigInteger n=java.math.BigInteger.ZERO;for(String part:x.toLowerCase(Locale.US).split("\\\\+")){part=part.replace("m","").trim();if(part.isEmpty())continue;int b=Integer.parseInt(part);if(b<1||b>90)throw new IllegalArgumentException("رقم باند غير صالح: "+b);n=n.setBit(b-1);}return n.toString(16).toUpperCase(Locale.US);
-          }
-          private void applyBands(String lteBands,String nrBands){
-              io.execute(()->{
-                  try{
-                      String lteMask=bandsToMask(lteBands,false),nrMask=bandsToMask(nrBands,true);
-                      String body="<?xml version=\\"1.0\\" encoding=\\"UTF-8\\"?><request><NetworkMode>00</NetworkMode><NetworkBand>3FFFFFFFFFFFFFFF</NetworkBand><LTEBand>"+lteMask+"</LTEBand><NRBand>"+nrMask+"</NRBand></request>";
-                      HttpResult r=request("POST","/api/net/net-mode",body,true);String err=errorCode(r.body);if(r.code>=400||!err.isEmpty())throw new Exception(err.isEmpty()?"HTTP "+r.code:"رمز الراوتر "+err);
-                      runOnUiThread(()->{toast("تم تطبيق إعدادات الباند");refreshData();});
-                  }catch(Exception e){runOnUiThread(()->toast("فشل تطبيق الباند: "+e.getMessage()));}
-              });
-          }
+        io.execute(()->{
+            try{
+                String xml=get("/api/net/net-mode");
+                String lte=tagCI(xml,"LTEBand"),nr=tagCI(xml,"NRBand"),mode=tagCI(xml,"NetworkMode");
+                runOnUiThread(()->showBandEditor(lte,nr,mode));
+            }catch(Exception e){runOnUiThread(()->toast("تعذر قراءة إعدادات الباند: "+e.getMessage()));}
+        });
+    }
+    private void showBandEditor(String lteMask,String nrMask,String mode){
+        LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);l.setPadding(dp(18),dp(4),dp(18),dp(4));
+        TextView h=tv("اكتب أرقام الباند مفصولة بـ +. مثال: 1+3+28.\nاكتب AUTO لاستخدام جميع الباندات.",13);h.setTextColor(Color.LTGRAY);l.addView(h);
+        EditText lte=field("باندات 4G",maskToBands(lteMask,false));l.addView(lte);
+        EditText nr=field("باندات 5G",maskToBands(nrMask,true));l.addView(nr);
+        new AlertDialog.Builder(this).setTitle("إعدادات 4G / 5G").setView(l).setNegativeButton("إلغاء",null).setPositiveButton("تطبيق",(d,w)->applyBands(lte.getText().toString(),nr.getText().toString())).show();
+    }
+    private String maskToBands(String mask,boolean nr){
+        if(mask==null||mask.trim().isEmpty())return "AUTO";
+        String x=mask.trim();if(x.equalsIgnoreCase("7FFFFFFFFFFFFFFF")||x.equalsIgnoreCase("4000000000000000006"))return "AUTO";
+        try{java.math.BigInteger n=new java.math.BigInteger(x,16);StringBuilder b=new StringBuilder();for(int i=0;i<90;i++)if(n.testBit(i)){if(b.length()>0)b.append('+');b.append(i+1);}return b.length()>0?b.toString():"AUTO";}catch(Exception e){return "AUTO";}
+    }
+    private String bandsToMask(String bands,boolean nr){
+        String x=bands==null?"":bands.trim();
+        if(x.isEmpty()||x.equalsIgnoreCase("AUTO"))return nr?"4000000000000000006":"7FFFFFFFFFFFFFFF";
+        java.math.BigInteger n=java.math.BigInteger.ZERO;
+        for(String part:x.toLowerCase(Locale.US).split("\\+")){part=part.replace("m","").trim();if(part.isEmpty())continue;int b=Integer.parseInt(part);if(b<1||b>90)throw new IllegalArgumentException("رقم باند غير صالح: "+b);n=n.setBit(b-1);}
+        return n.toString(16).toUpperCase(Locale.US);
+    }
+    private void applyBands(String lteBands,String nrBands){
+        io.execute(()->{
+            try{
+                String lteMask=bandsToMask(lteBands,false),nrMask=bandsToMask(nrBands,true);
+                String body="<?xml version=\"1.0\" encoding=\"UTF-8\"?><request><NetworkMode>00</NetworkMode><NetworkBand>3FFFFFFFFFFFFFFF</NetworkBand><LTEBand>"+lteMask+"</LTEBand><NRBand>"+nrMask+"</NRBand></request>";
+                HttpResult r=request("POST","/api/net/net-mode",body,true);String err=errorCode(r.body);if(r.code>=400||!err.isEmpty())throw new Exception(err.isEmpty()?"HTTP "+r.code:"رمز الراوتر "+err);
+                runOnUiThread(()->{toast("تم تطبيق إعدادات الباند");refreshData();});
+            }catch(Exception e){runOnUiThread(()->toast("فشل تطبيق الباند: "+e.getMessage()));}
+        });
+    }
     private void confirmReboot'''
           s,n=re.subn(r'    private void bandDialog\(\).*?    private void confirmReboot', band, s, count=1, flags=re.S)
           if n != 1: raise SystemExit('band dialog not found')
 
-          # 4) Parse Huawei values such as -73dBm and HTML-escaped limits reliably.
+          # 4) Parse values such as -73dBm robustly.
           old='private double parseDouble(String s,double d){try{return Double.parseDouble(s.replace("dBm","").replace("dB","").trim());}catch(Exception e){return d;}}'
           new='private double parseDouble(String s,double d){try{if(s==null)return d;String x=s.replace("−","-").replace("–","-").replace("&gt;=",">").replace("&lt;=","<").replace("dBm","").replace("dB","").trim();Matcher m=Pattern.compile("[-+]?\\\\d+(?:\\\\.\\\\d+)?").matcher(x);return m.find()?Double.parseDouble(m.group()):d;}catch(Exception e){return d;}}'
           if old not in s: raise SystemExit('parseDouble not found')
           s=s.replace(old,new,1)
 
-          # 5) Send the current verification token on GET as well; H158-381 firmware may rotate it.
+          # 5) Always send the current verification token when available.
           old='if(write){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/x-www-form-urlencoded; charset=UTF-8");if(!token.isEmpty())c.setRequestProperty("__RequestVerificationToken",firstToken(token));}'
           new='if(!token.isEmpty())c.setRequestProperty("__RequestVerificationToken",firstToken(token));if(write){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/xml; charset=UTF-8");}'
           if old not in s: raise SystemExit('request block not found')
