@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,229 +35,189 @@ jobs:
           mkdir -p android/app/src/main/res/values
 
           cat > android/settings.gradle <<'EOF'
-          pluginManagement {
-              repositories {
-                  google()
-                  mavenCentral()
-                  gradlePluginPortal()
-              }
-          }
-
-          dependencyResolutionManagement {
-              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-              repositories {
-                  google()
-                  mavenCentral()
-              }
-          }
-
-          rootProject.name = "HuaweiRouterManager"
-          include(":app")
-          EOF
+pluginManagement {
+    repositories { google(); mavenCentral(); gradlePluginPortal() }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories { google(); mavenCentral() }
+}
+rootProject.name = "HuaweiRouterManager"
+include(":app")
+EOF
 
           cat > android/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application' version '8.7.3' apply false
-          }
-          EOF
+plugins {
+    id 'com.android.application' version '8.7.3' apply false
+}
+EOF
 
           cat > android/gradle.properties <<'EOF'
-          org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
-          android.useAndroidX=true
-          EOF
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+android.useAndroidX=true
+EOF
 
           cat > android/app/build.gradle <<'EOF'
-          plugins {
-              id 'com.android.application'
-          }
+plugins { id 'com.android.application' }
 
-          android {
-              namespace 'com.hectrl381.router'
-              compileSdk 35
-
-              defaultConfig {
-                  applicationId 'com.hectrl381.router'
-                  minSdk 23
-                  targetSdk 35
-                  versionCode 2
-                  versionName '2.0'
-              }
-          }
-          EOF
+android {
+    namespace 'com.hectrl381.router'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.hectrl381.router'
+        minSdk 23
+        targetSdk 35
+        versionCode 3
+        versionName '3.0'
+    }
+}
+EOF
 
           cat > android/app/src/main/res/xml/network_security_config.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <network-security-config>
-              <base-config cleartextTrafficPermitted="true" />
-          </network-security-config>
-          EOF
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
+EOF
 
           cat > android/app/src/main/res/values/styles.xml <<'EOF'
-          <resources>
-              <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
-                  <item name="android:fontFamily">sans</item>
-                  <item name="android:colorAccent">#2563EB</item>
-                  <item name="android:statusBarColor">#0B0F14</item>
-                  <item name="android:navigationBarColor">#0B0F14</item>
-                  <item name="android:windowLightStatusBar">false</item>
-              </style>
-          </resources>
-          EOF
+<resources>
+    <style name="AppTheme" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#3B82F6</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:statusBarColor">#070B10</item>
+        <item name="android:navigationBarColor">#070B10</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
+EOF
 
           cat > android/app/src/main/AndroidManifest.xml <<'EOF'
-          <?xml version="1.0" encoding="utf-8"?>
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application
-                  android:allowBackup="false"
-                  android:label="Huawei Router Manager"
-                  android:theme="@style/AppTheme"
-                  android:usesCleartextTraffic="true"
-                  android:networkSecurityConfig="@xml/network_security_config">
-                  <activity
-                      android:name=".MainActivity"
-                      android:screenOrientation="portrait"
-                      android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application
+        android:allowBackup="false"
+        android:label="Huawei Router Manager"
+        android:theme="@style/AppTheme"
+        android:usesCleartextTraffic="true"
+        android:networkSecurityConfig="@xml/network_security_config">
+        <activity android:name=".MainActivity" android:screenOrientation="portrait" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+EOF
 
           cat > android/app/src/main/java/com/hectrl381/router/MainActivity.java <<'EOF'
-          package com.hectrl381.router;
+package com.hectrl381.router;
 
-          import android.app.Activity;
-          import android.graphics.Color;
-          import android.os.Bundle;
-          import android.view.Gravity;
-          import android.view.ViewGroup;
-          import android.webkit.WebSettings;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-          import android.widget.Button;
-          import android.widget.EditText;
-          import android.widget.LinearLayout;
-          import android.widget.TextView;
+import android.app.Activity;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.view.ViewGroup;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import android.widget.Toast;
 
-          public class MainActivity extends Activity {
-              private WebView webView;
-              private EditText ipInput;
+public class MainActivity extends Activity {
+    private WebView web;
+    private EditText ip;
+    private LinearLayout root;
+    private int blue = Color.rgb(37,99,235);
+    private int bg = Color.rgb(7,11,16);
+    private int card = Color.rgb(17,24,32);
 
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  showHome();
-              }
+    private int dp(int v) { return (int)(v * getResources().getDisplayMetrics().density + .5f); }
 
-              private int dp(int v) {
-                  return (int)(v * getResources().getDisplayMetrics().density + 0.5f);
-              }
+    private TextView text(String s, float size, boolean bold) {
+        TextView t = new TextView(this);
+        t.setText(s); t.setTextSize(size); t.setTextColor(Color.WHITE);
+        t.setGravity(Gravity.CENTER_VERTICAL); t.setPadding(dp(14),dp(8),dp(14),dp(8));
+        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        return t;
+    }
 
-              private TextView label(String s, float size) {
-                  TextView t = new TextView(this);
-                  t.setText(s);
-                  t.setTextSize(size);
-                  t.setTextColor(Color.WHITE);
-                  t.setGravity(Gravity.CENTER);
-                  t.setPadding(dp(8), dp(8), dp(8), dp(8));
-                  return t;
-              }
+    private Button btn(String s) {
+        Button b = new Button(this); b.setText(s); b.setTextSize(15); b.setTextColor(Color.WHITE);
+        b.setAllCaps(false); b.setBackgroundColor(blue);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(-1, dp(56));
+        p.setMargins(0,dp(5),0,dp(5)); b.setLayoutParams(p); return b;
+    }
 
-              private Button button(String s) {
-                  Button b = new Button(this);
-                  b.setText(s);
-                  b.setTextSize(15);
-                  b.setTextColor(Color.WHITE);
-                  b.setAllCaps(false);
-                  b.setBackgroundColor(Color.rgb(37, 99, 235));
-                  LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
-                          ViewGroup.LayoutParams.MATCH_PARENT, dp(58));
-                  p.setMargins(0, dp(6), 0, dp(6));
-                  b.setLayoutParams(p);
-                  return b;
-              }
+    @Override public void onCreate(Bundle b) { super.onCreate(b); home(); }
 
-              private void showHome() {
-                  LinearLayout home = new LinearLayout(this);
-                  home.setOrientation(LinearLayout.VERTICAL);
-                  home.setGravity(Gravity.CENTER_HORIZONTAL);
-                  home.setPadding(dp(20), dp(24), dp(20), dp(20));
-                  home.setBackgroundColor(Color.rgb(11,15,20));
+    private void home() {
+        ScrollView scroll = new ScrollView(this); scroll.setBackgroundColor(bg);
+        root = new LinearLayout(this); root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(18),dp(20),dp(18),dp(24)); scroll.addView(root);
 
-                  home.addView(label("📡 Huawei Router Manager", 25),
-                          new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(70)));
-                  TextView sub = label("H158-381 • تحكم متقدم بالراوتر", 17);
-                  sub.setTextColor(Color.LTGRAY);
-                  home.addView(sub, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(55)));
+        TextView title = text("📡  Huawei Router Manager", 25, true);
+        title.setGravity(Gravity.CENTER); root.addView(title,new LinearLayout.LayoutParams(-1,dp(65)));
+        TextView sub = text("H158-381  •  لوحة تحكم متقدمة",16,false); sub.setTextColor(Color.LTGRAY);
+        sub.setGravity(Gravity.CENTER); root.addView(sub,new LinearLayout.LayoutParams(-1,dp(45)));
 
-                  ipInput = new EditText(this);
-                  ipInput.setSingleLine(true);
-                  ipInput.setText("192.168.8.1");
-                  ipInput.setTextColor(Color.WHITE);
-                  ipInput.setHintTextColor(Color.GRAY);
-                  ipInput.setHint("عنوان IP للراوتر");
-                  ipInput.setGravity(Gravity.CENTER);
-                  home.addView(ipInput, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(60)));
+        ip = new EditText(this); ip.setSingleLine(true); ip.setText("192.168.8.1");
+        ip.setHint("IP الراوتر"); ip.setTextColor(Color.WHITE); ip.setHintTextColor(Color.GRAY); ip.setGravity(Gravity.CENTER);
+        root.addView(ip,new LinearLayout.LayoutParams(-1,dp(58)));
 
-                  Button main = button("🌐 لوحة تحكم الراوتر");
-                  main.setOnClickListener(v -> openPath("/"));
-                  home.addView(main);
+        addSection("الاتصال");
+        Button open = btn("🌐 فتح لوحة Huawei الأصلية"); open.setOnClickListener(v -> open("/")); root.addView(open);
+        Button refresh = btn("🔄 فحص الاتصال بالراوتر"); refresh.setOnClickListener(v -> open("/")); root.addView(refresh);
 
-                  Button bands = button("📶 قفل الترددات والباندات");
-                  bands.setOnClickListener(v -> openPath("/#/developermode"));
-                  home.addView(bands);
+        addSection("الشبكة والإشارة");
+        Button info = btn("📊 معلومات الإشارة والخلية"); info.setOnClickListener(v -> open("/#/cellinfo")); root.addView(info);
+        Button network = btn("📶 إعدادات الشبكة / 4G / 5G"); network.setOnClickListener(v -> open("/#/netmode")); root.addView(network);
+        Button bands = btn("🔒 الترددات والباندات"); bands.setOnClickListener(v -> open("/#/bandlock")); root.addView(bands);
+        Button advanced = btn("⚙️ الوضع المتقدم / Developer"); advanced.setOnClickListener(v -> open("/#/developermode")); root.addView(advanced);
 
-                  Button signal = button("📊 معلومات الإشارة والخلية");
-                  signal.setOnClickListener(v -> openPath("/#/cellinfo"));
-                  home.addView(signal);
+        addSection("الراوتر والواي فاي");
+        Button wifi = btn("📡 Wi‑Fi والأجهزة المتصلة"); wifi.setOnClickListener(v -> open("/")); root.addView(wifi);
+        Button reboot = btn("🔁 إعادة تشغيل الراوتر"); reboot.setOnClickListener(v -> {
+            Toast.makeText(this,"سيتم فتح واجهة الراوتر للتأكيد قبل إعادة التشغيل",Toast.LENGTH_SHORT).show(); open("/");
+        }); root.addView(reboot);
 
-                  Button wifi = button("📡 إعدادات Wi‑Fi والأجهزة");
-                  wifi.setOnClickListener(v -> openPath("/"));
-                  home.addView(wifi);
+        TextView note = text("مهم: التطبيق يفتح واجهة Huawei من داخل التطبيق. بعض مسارات الترددات تختلف حسب إصدار Firmware للـ H158-381؛ إذا لم يفتح مسار معيّن نستخدم واجهة الراوتر الفعلية بدل اختراع API غير مدعوم.",13,false);
+        note.setTextColor(Color.rgb(155,165,180)); root.addView(note,new LinearLayout.LayoutParams(-1,dp(125)));
+        setContentView(scroll);
+    }
 
-                  TextView note = label("يجب أن يكون الهاتف متصلًا بشبكة الراوتر.\\n" +
-                          "قفل الترددات/الخلايا يتم من واجهة Huawei الأصلية ويُطبّق مباشرة على الراوتر.", 14);
-                  note.setTextColor(Color.rgb(160,170,185));
-                  home.addView(note, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(100)));
+    private void addSection(String s) {
+        TextView h=text(s,18,true); h.setTextColor(Color.rgb(110,170,255));
+        LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(45)); p.setMargins(0,dp(14),0,0); root.addView(h,p);
+    }
 
-                  setContentView(home);
-              }
+    private String base() {
+        String s=ip.getText().toString().trim(); if(s.isEmpty()) s="192.168.8.1";
+        if(!s.startsWith("http://")&&!s.startsWith("https://")) s="http://"+s; return s;
+    }
 
-              private String base() {
-                  String ip = ipInput.getText().toString().trim();
-                  if (ip.isEmpty()) ip = "192.168.8.1";
-                  if (ip.startsWith("http://") || ip.startsWith("https://")) return ip;
-                  return "http://" + ip;
-              }
+    private void open(String path) {
+        web=new WebView(this); WebSettings s=web.getSettings(); s.setJavaScriptEnabled(true); s.setDomStorageEnabled(true);
+        s.setDatabaseEnabled(true); s.setSupportZoom(true); s.setBuiltInZoomControls(false); s.setDisplayZoomControls(false);
+        web.setWebViewClient(new WebViewClient(){
+            @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest r){ return false; }
+        });
+        setContentView(web); web.loadUrl(base()+path);
+    }
 
-              private void openPath(String path) {
-                  webView = new WebView(this);
-                  WebSettings s = webView.getSettings();
-                  s.setJavaScriptEnabled(true);
-                  s.setDomStorageEnabled(true);
-                  s.setDatabaseEnabled(true);
-                  s.setBuiltInZoomControls(false);
-                  s.setDisplayZoomControls(false);
-                  webView.setWebViewClient(new WebViewClient());
-                  setContentView(webView);
-                  webView.loadUrl(base() + path);
-              }
-
-              @Override
-              public void onBackPressed() {
-                  if (webView != null && webView.canGoBack()) {
-                      webView.goBack();
-                  } else {
-                      webView = null;
-                      showHome();
-                  }
-              }
-          }
-          EOF
+    @Override public void onBackPressed(){ if(web!=null && web.canGoBack()) web.goBack(); else {web=null; home();} }
+}
+EOF
 
           cd android
           gradle wrapper --gradle-version 8.9
@@ -267,5 +226,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Huawei-Router-Manager-v2
+          name: Huawei-Router-Manager-v3
           path: android/app/build/outputs/apk/debug/app-debug.apk
