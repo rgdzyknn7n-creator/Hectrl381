@@ -78,8 +78,8 @@ jobs:
                   applicationId 'com.hectrl381.router'
                   minSdk 23
                   targetSdk 35
-                  versionCode 1
-                  versionName '1.0'
+                  versionCode 2
+                  versionName '2.0'
               }
           }
           EOF
@@ -93,7 +93,7 @@ jobs:
 
           cat > android/app/src/main/res/values/styles.xml <<'EOF'
           <resources>
-              <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+              <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
                   <item name="android:fontFamily">sans</item>
                   <item name="android:colorAccent">#2563EB</item>
                   <item name="android:statusBarColor">#0B0F14</item>
@@ -106,26 +106,21 @@ jobs:
           cat > android/app/src/main/AndroidManifest.xml <<'EOF'
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-
               <uses-permission android:name="android.permission.INTERNET" />
-
               <application
                   android:allowBackup="false"
                   android:label="Huawei Router Manager"
                   android:theme="@style/AppTheme"
                   android:usesCleartextTraffic="true"
                   android:networkSecurityConfig="@xml/network_security_config">
-
                   <activity
                       android:name=".MainActivity"
                       android:screenOrientation="portrait"
                       android:exported="true">
-
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
                           <category android:name="android.intent.category.LAUNCHER" />
                       </intent-filter>
-
                   </activity>
               </application>
           </manifest>
@@ -138,6 +133,7 @@ jobs:
           import android.graphics.Color;
           import android.os.Bundle;
           import android.view.Gravity;
+          import android.view.View;
           import android.view.ViewGroup;
           import android.webkit.WebSettings;
           import android.webkit.WebView;
@@ -148,9 +144,9 @@ jobs:
           import android.widget.TextView;
 
           public class MainActivity extends Activity {
-
               private WebView webView;
               private EditText ipInput;
+              private LinearLayout home;
 
               @Override
               protected void onCreate(Bundle savedInstanceState) {
@@ -158,103 +154,117 @@ jobs:
                   showHome();
               }
 
-              private int dp(int value) {
-                  return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
+              private int dp(int v) {
+                  return (int)(v * getResources().getDisplayMetrics().density + 0.5f);
               }
 
-              private TextView text(String value, float size, int color) {
+              private TextView label(String s, float size) {
                   TextView t = new TextView(this);
-                  t.setText(value);
+                  t.setText(s);
                   t.setTextSize(size);
-                  t.setTextColor(color);
+                  t.setTextColor(Color.WHITE);
                   t.setGravity(Gravity.CENTER);
+                  t.setPadding(dp(8), dp(8), dp(8), dp(8));
                   return t;
               }
 
-              private void showHome() {
-                  LinearLayout root = new LinearLayout(this);
-                  root.setOrientation(LinearLayout.VERTICAL);
-                  root.setPadding(dp(24), dp(24), dp(24), dp(24));
-                  root.setBackgroundColor(Color.rgb(11, 15, 20));
+              private Button button(String s) {
+                  Button b = new Button(this);
+                  b.setText(s);
+                  b.setTextSize(15);
+                  b.setTextColor(Color.WHITE);
+                  b.setAllCaps(false);
+                  b.setBackgroundColor(Color.rgb(37, 99, 235));
+                  LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(
+                          ViewGroup.LayoutParams.MATCH_PARENT, dp(58));
+                  p.setMargins(0, dp(6), 0, dp(6));
+                  b.setLayoutParams(p);
+                  return b;
+              }
 
-                  TextView title = text("📡 Huawei Router", 30, Color.WHITE);
-                  root.addView(title, new LinearLayout.LayoutParams(
+              private void showHome() {
+                  home = new LinearLayout(this);
+                  home.setOrientation(LinearLayout.VERTICAL);
+                  home.setGravity(Gravity.CENTER_HORIZONTAL);
+                  home.setPadding(dp(20), dp(24), dp(20), dp(20));
+                  home.setBackgroundColor(Color.rgb(11,15,20));
+
+                  TextView title = label("📡 Huawei Router Manager", 25);
+                  home.addView(title, new LinearLayout.LayoutParams(
                           ViewGroup.LayoutParams.MATCH_PARENT, dp(70)));
 
-                  TextView sub = text("لوحة تحكم الراوتر", 19, Color.LTGRAY);
-                  root.addView(sub, new LinearLayout.LayoutParams(
+                  TextView sub = label("H158-381 • تحكم متقدم بالراوتر", 17);
+                  sub.setTextColor(Color.LTGRAY);
+                  home.addView(sub, new LinearLayout.LayoutParams(
                           ViewGroup.LayoutParams.MATCH_PARENT, dp(55)));
-
-                  TextView model = text(
-                          "Huawei 5G CPE Pro 5\\nH158-381\\n\\nتحكم كامل بواجهة الراوتر الأصلية",
-                          18, Color.WHITE);
-                  root.addView(model, new LinearLayout.LayoutParams(
-                          ViewGroup.LayoutParams.MATCH_PARENT, dp(170)));
 
                   ipInput = new EditText(this);
                   ipInput.setSingleLine(true);
                   ipInput.setText("192.168.8.1");
                   ipInput.setTextColor(Color.WHITE);
                   ipInput.setHintTextColor(Color.GRAY);
-                  ipInput.setHint("IP الراوتر");
-                  root.addView(ipInput, new LinearLayout.LayoutParams(
+                  ipInput.setHint("عنوان IP للراوتر");
+                  ipInput.setGravity(Gravity.CENTER);
+                  home.addView(ipInput, new LinearLayout.LayoutParams(
                           ViewGroup.LayoutParams.MATCH_PARENT, dp(60)));
 
-                  Button open = new Button(this);
-                  open.setText("فتح التحكم الكامل بالراوتر");
-                  open.setOnClickListener(v -> openRouter());
-                  root.addView(open, new LinearLayout.LayoutParams(
-                          ViewGroup.LayoutParams.MATCH_PARENT, dp(60)));
+                  Button main = button("🌐 لوحة تحكم الراوتر");
+                  main.setOnClickListener(v -> openPath("/"));
+                  home.addView(main);
 
-                  Button info = new Button(this);
-                  info.setText("معلومات");
-                  info.setOnClickListener(v -> {
-                      TextView msg = text(
-                              "صل الجهاز بنفس شبكة الراوتر ثم اضغط فتح التحكم.\\n\\n" +
-                              "سيتم فتح واجهة Huawei الأصلية داخل التطبيق، وبالتالي تستطيع استخدام إعدادات الشبكة والواي فاي والأجهزة والأدوات وغيرها.",
-                              16, Color.WHITE);
-                      msg.setPadding(dp(20), dp(20), dp(20), dp(20));
-                      setContentView(msg);
-                  });
-                  root.addView(info, new LinearLayout.LayoutParams(
-                          ViewGroup.LayoutParams.MATCH_PARENT, dp(55)));
+                  Button bands = button("📶 قفل الترددات والباندات");
+                  bands.setOnClickListener(v -> openPath("/#/developermode"));
+                  home.addView(bands);
 
-                  setContentView(root);
+                  Button signal = button("📊 معلومات الإشارة والخلية");
+                  signal.setOnClickListener(v -> openPath("/#/cellinfo"));
+                  home.addView(signal);
+
+                  Button wifi = button("📡 إعدادات Wi‑Fi والأجهزة");
+                  wifi.setOnClickListener(v -> openPath("/"));
+                  home.addView(wifi);
+
+                  TextView note = label(
+                          "مهم: يجب أن يكون الهاتف متصلًا بشبكة الراوتر.\\n" +
+                          "صفحة قفل الترددات تستخدم واجهة Huawei الأصلية، لذلك أي تغيير يتم تطبيقه مباشرة على الراوتر.", 14);
+                  note.setTextColor(Color.rgb(160,170,185));
+                  home.addView(note, new LinearLayout.LayoutParams(
+                          ViewGroup.LayoutParams.MATCH_PARENT, dp(110)));
+
+                  setContentView(home);
               }
 
-              private void openRouter() {
+              private String base() {
                   String ip = ipInput.getText().toString().trim();
+                  if (ip.isEmpty()) ip = "192.168.8.1";
+                  if (ip.startsWith("http://") || ip.startsWith("https://")) return ip;
+                  return "http://" + ip;
+              }
 
-                  if (ip.isEmpty()) {
-                      ip = "192.168.8.1";
-                  }
-
-                  if (!ip.startsWith("http://") && !ip.startsWith("https://")) {
-                      ip = "http://" + ip;
-                  }
-
+              private void openPath(String path) {
                   webView = new WebView(this);
-
-                  WebSettings settings = webView.getSettings();
-                  settings.setJavaScriptEnabled(true);
-                  settings.setDomStorageEnabled(true);
-                  settings.setDatabaseEnabled(true);
-                  settings.setBuiltInZoomControls(false);
-                  settings.setDisplayZoomControls(false);
-
+                  WebSettings s = webView.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  s.setDatabaseEnabled(true);
+                  s.setBuiltInZoomControls(false);
+                  s.setDisplayZoomControls(false);
+                  s.setLoadsImagesAutomatically(true);
                   webView.setWebViewClient(new WebViewClient());
-
                   setContentView(webView);
-                  webView.loadUrl(ip);
+                  webView.loadUrl(base() + path);
               }
 
               @Override
               public void onBackPressed() {
-                  if (webView != null && webView.canGoBack()) {
-                      webView.goBack();
-                  } else {
-                      showHome();
+                  if (webView != null) {
+                      if (webView.canGoBack()) {
+                          webView.goBack();
+                          return;
+                      }
+                      webView = null;
                   }
+                  showHome();
               }
           }
           EOF
@@ -266,5 +276,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Huawei-Router-Manager
+          name: Huawei-Router-Manager-v2
           path: android/app/build/outputs/apk/debug/app-debug.apk
