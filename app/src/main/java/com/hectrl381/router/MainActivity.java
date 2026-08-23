@@ -78,20 +78,17 @@ public class MainActivity extends Activity {
     }
     private String base(){return "http://"+router;}
 
-    /* Huawei WebUI 10.x uses a session cookie plus a 32-character request token.
-       The token returned by SesTokInfo/webserver/token must not be sent in full. */
     private void initSession() throws Exception {
         cookie=""; token=""; tokenOne=""; tokenTwo="";
         HttpResult r=request("GET","/api/webserver/SesTokInfo",null,false);
         String ses=tag(r.body,"SesInfo");
         String tok=tag(r.body,"TokInfo");
         if(!ses.isEmpty()) cookie=ses.startsWith("SessionID=")?ses:"SessionID="+ses;
-        if(tok.length()>32) token=tok.substring(tok.length()-32); else token=tok;
+        token=firstToken(tok);
         if(cookie.isEmpty()) throw new Exception("لم يتم الحصول على SessionID");
         if(token.isEmpty()) {
             HttpResult t=request("GET","/api/webserver/token",null,false);
-            String full=tag(t.body,"token");
-            if(full.length()>32) token=full.substring(full.length()-32); else token=full;
+            token=firstToken(tag(t.body,"token"));
         }
         if(token.isEmpty()) throw new Exception("لم يتم الحصول على رمز الدخول");
     }
@@ -102,20 +99,32 @@ public class MainActivity extends Activity {
             try {
                 initSession();
                 HttpResult state=request("GET","/api/user/state-login",null,false);
-                String st=tag(state.body,"State"); if(st.isEmpty()) st=tag(state.body,"state");
-                if("0".equals(st) && username.equalsIgnoreCase(firstNonEmpty(tag(state.body,"Username"),tag(state.body,"username")))) return;
-                try { scramLogin(); verifyLoggedIn(); return; }
-                catch(Exception scramError) {
-                    last=scramError;
-                    String msg=scramError.getMessage()==null?"":scramError.getMessage();
-                    if(msg.contains("125003") || msg.contains("رمز الجلسة") || msg.contains("token")) continue;
-                    // Some Huawei firmwares expose the older /api/user/login flow.
-                    try { legacyLogin(); verifyLoggedIn(); return; } catch(Exception legacyError) { last=legacyError; }
-                    if(msg.contains("108001") || msg.contains("108002") || msg.contains("108006")) throw scramError;
+                String st=firstNonEmpty(tag(state.body,"State"),tag(state.body,"state"));
+                if("0".equals(st)) {
+                    String u=firstNonEmpty(tag(state.body,"Username"),tag(state.body,"username"));
+                    if(u.isEmpty() || username.equalsIgnoreCase(u)) return;
                 }
-            } catch(Exception e) { last=e; if(e.getMessage()!=null && e.getMessage().contains("125003")) continue; }
+                String passwordType=firstNonEmpty(tag(state.body,"password_type"),tag(state.body,"PasswordType"));
+                try {
+                    if("4".equals(passwordType) || passwordType.isEmpty()) legacyLogin();
+                    else scramLogin();
+                    verifyLoggedIn();
+                    return;
+                } catch(Exception authError) {
+                    last=authError;
+                    String msg=authError.getMessage()==null?"":authError.getMessage();
+                    if(msg.contains("125003") || msg.contains("125002") || msg.contains("125001") || msg.contains("token") || msg.contains("رمز الجلسة")) continue;
+                    throw authError;
+                }
+            } catch(Exception e) {
+                last=e;
+                String msg=e.getMessage()==null?"":e.getMessage();
+                if(msg.contains("125003") || msg.contains("125002") || msg.contains("125001") || msg.contains("token") || msg.contains("رمز الجلسة")) continue;
+                throw e;
+            }
         }
-        if(last!=null) throw last; throw new Exception("تعذر تسجيل الدخول");
+        if(last!=null) throw last;
+        throw new Exception("تعذر تسجيل الدخول");
     }
 
     private void scramLogin() throws Exception {
@@ -124,7 +133,7 @@ public class MainActivity extends Activity {
         HttpResult c=request("POST","/api/user/challenge_login",challenge,true);
         String err=errorCode(c.body); if(!err.isEmpty()) throw new Exception("رمز الراوتر "+err);
         String salt=tag(c.body,"salt"), server=tag(c.body,"servernonce");
-        int iterations=parseInt(tag(c.body,"iterations"),1000);
+        int iterations=parseInt(tag(c.body,"iterations"),100);
         if(salt.isEmpty()||server.isEmpty()) throw new Exception("الراوتر لم يعطِ بيانات challenge_login");
         byte[] salted=pbkdf2(password,hexToBytes(salt),iterations);
         byte[] clientKey=hmac(salted,"Client Key");
@@ -135,37 +144,46 @@ public class MainActivity extends Activity {
         String body="<?xml version=\"1.0\" encoding=\"UTF-8\"?><request><clientproof>"+hex(proof)+"</clientproof><finalnonce>"+xml(server)+"</finalnonce></request>";
         HttpResult l=request("POST","/api/user/authentication_login",body,true);
         err=errorCode(l.body);
-        if(!err.isEmpty()) throw new Exception("رمز الراوتر "+err+" (قد يكون رمز الجلسة أو بيانات الدخول)");
+        if(!err.isEmpty()) throw new Exception("رمز الراوتر "+err);
         if(l.code>=400) throw new Exception("فشل authentication_login HTTP "+l.code);
-        if(l.setCookie!=null&&!l.setCookie.isEmpty()) cookie=l.setCookie.split(";",2)[0];
+        if(l.setCookie!=null&&!l.setCookie.isEmpty()) cookie=extractCookie(l.setCookie);
         captureTokens(l);
     }
 
     private void legacyLogin() throws Exception {
         if(token.isEmpty()) throw new Exception("لا يوجد رمز دخول");
-        String hashed=base64Sha256(hexSha256(password));
+        String hashed=base64Sha256(password);
         String passwordValue=base64Sha256(username+hashed+token);
         String body="<?xml version=\"1.0\" encoding=\"UTF-8\"?><request><Username>"+xml(username)+"</Username><Password>"+passwordValue+"</Password><password_type>4</password_type></request>";
         HttpResult r=request("POST","/api/user/login",body,true);
         String err=errorCode(r.body); if(!err.isEmpty()) throw new Exception("رمز الراوتر "+err);
-        if(!r.body.contains("OK") && r.code>=400) throw new Exception("فشل تسجيل الدخول القديم HTTP "+r.code);
-        if(r.setCookie!=null&&!r.setCookie.isEmpty()) cookie=r.setCookie.split(";",2)[0];
+        if(!r.body.contains("OK") && r.code>=400) throw new Exception("فشل تسجيل الدخول HTTP "+r.code);
+        if(r.setCookie!=null&&!r.setCookie.isEmpty()) cookie=extractCookie(r.setCookie);
         captureTokens(r);
+        String ses=tag(r.body,"SesInfo");
+        if(!ses.isEmpty()) cookie=ses.startsWith("SessionID=")?ses:"SessionID="+ses;
     }
 
     private void verifyLoggedIn() throws Exception {
         HttpResult r=request("GET","/api/user/state-login",null,false);
         String state=firstNonEmpty(tag(r.body,"State"),tag(r.body,"state"));
         String u=firstNonEmpty(tag(r.body,"Username"),tag(r.body,"username"));
-        if(!"0".equals(state) || (u.isEmpty() || !username.equalsIgnoreCase(u))) {
+        if(!"0".equals(state) || (!u.isEmpty() && !username.equalsIgnoreCase(u))) {
             String err=errorCode(r.body); throw new Exception(err.isEmpty()?"الراوتر لم يؤكد تسجيل الدخول":"رمز الراوتر "+err);
         }
     }
 
     private void captureTokens(HttpResult r) {
-        if(r.tokenHeader!=null&&!r.tokenHeader.isEmpty()) token=r.tokenHeader;
-        if(r.tokenOne!=null&&!r.tokenOne.isEmpty()) tokenOne=r.tokenOne;
-        if(r.tokenTwo!=null&&!r.tokenTwo.isEmpty()) tokenTwo=r.tokenTwo;
+        String h=r.tokenHeader;
+        if(h!=null&&!h.isEmpty()) {
+            String[] parts=h.trim().split("#");
+            token=parts.length>0?parts[0].trim():"";
+            tokenOne=parts.length>1?parts[1].trim():"";
+            tokenTwo=parts.length>2?parts[2].trim():"";
+        }
+        if((token==null||token.isEmpty()) && r.tokenOne!=null&&!r.tokenOne.isEmpty()) token=firstToken(r.tokenOne);
+        if(r.tokenOne!=null&&!r.tokenOne.isEmpty()) tokenOne=firstToken(r.tokenOne);
+        if(r.tokenTwo!=null&&!r.tokenTwo.isEmpty()) tokenTwo=firstToken(r.tokenTwo);
     }
 
     private void refreshData(){io.execute(()->{try{
@@ -211,12 +229,15 @@ public class MainActivity extends Activity {
     private HttpResult request(String method,String path,String body,boolean write)throws Exception{
         HttpURLConnection c=(HttpURLConnection)new URL(base()+path).openConnection();c.setConnectTimeout(7000);c.setReadTimeout(10000);c.setRequestMethod(method);c.setUseCaches(false);c.setRequestProperty("X-Requested-With","XMLHttpRequest");c.setRequestProperty("Accept","*/*");c.setRequestProperty("Referer",base()+"/");
         if(!cookie.isEmpty())c.setRequestProperty("Cookie",cookie);
-        if(write){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/x-www-form-urlencoded; charset=UTF-8");if(!token.isEmpty())c.setRequestProperty("__RequestVerificationToken",token);}
+        if(write){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/x-www-form-urlencoded; charset=UTF-8");if(!token.isEmpty())c.setRequestProperty("__RequestVerificationToken",firstToken(token));}
         if(body!=null){c.getOutputStream().write(body.getBytes(StandardCharsets.UTF_8));c.getOutputStream().close();}
         int code=c.getResponseCode();
         String nt=c.getHeaderField("__RequestVerificationToken");String n1=c.getHeaderField("__RequestVerificationTokenone");String n2=c.getHeaderField("__RequestVerificationTokentwo");
-        if(nt!=null&&!nt.isEmpty())token=nt;if(n1!=null&&!n1.isEmpty())tokenOne=n1;if(n2!=null&&!n2.isEmpty())tokenTwo=n2;
-        String sc=c.getHeaderField("Set-Cookie");if(sc!=null&&!sc.isEmpty())cookie=sc.split(";",2)[0];
+        String sc=c.getHeaderField("Set-Cookie");
+        if(nt!=null&&!nt.isEmpty()) { String[] p=nt.trim().split("#"); token=p[0].trim(); tokenOne=p.length>1?p[1].trim():""; tokenTwo=p.length>2?p[2].trim():""; }
+        if(n1!=null&&!n1.isEmpty()&&tokenOne.isEmpty()) tokenOne=firstToken(n1);
+        if(n2!=null&&!n2.isEmpty()&&tokenTwo.isEmpty()) tokenTwo=firstToken(n2);
+        if(sc!=null&&!sc.isEmpty()) cookie=extractCookie(sc);
         InputStream in=code>=400?c.getErrorStream():c.getInputStream();String text=read(in);c.disconnect();return new HttpResult(code,text,sc,nt,n1,n2);
     }
     private String read(InputStream in)throws Exception{if(in==null)return"";BufferedReader r=new BufferedReader(new InputStreamReader(in,StandardCharsets.UTF_8));StringBuilder b=new StringBuilder();String s;while((s=r.readLine())!=null)b.append(s);r.close();return b.toString();}
@@ -224,13 +245,14 @@ public class MainActivity extends Activity {
     private static String tag(String xml,String name){if(xml==null)return"";Matcher m=Pattern.compile("<"+Pattern.quote(name)+">(.*?)</"+Pattern.quote(name)+">",Pattern.DOTALL|Pattern.CASE_INSENSITIVE).matcher(xml);return m.find()?m.group(1).trim():"";}
     private static String errorCode(String xml){String c=tag(xml,"code");return c.isEmpty()?"":c;}
     private static String firstNonEmpty(String a,String b){return a!=null&&!a.isEmpty()?a:(b==null?"":b);}
+    private static String firstToken(String s){if(s==null)return"";String x=s.trim();int p=x.indexOf('#');if(p>=0)x=x.substring(0,p);return x.trim();}
+    private static String extractCookie(String s){if(s==null)return"";Matcher m=Pattern.compile("(?:^|;\\s*)(SessionID=[^;]+)",Pattern.CASE_INSENSITIVE).matcher(s);return m.find()?m.group(1):s.split(";",2)[0].trim();}
     private static String xml(String s){return s.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;").replace("'","&apos;");}
     private static int parseInt(String s,int d){try{return Integer.parseInt(s);}catch(Exception e){return d;}}
     private static String randomHex(int n){byte[]b=new byte[n];new SecureRandom().nextBytes(b);return hex(b);}
     private static byte[]hexToBytes(String s){if(s.length()%2!=0)throw new IllegalArgumentException("salt غير صالح");byte[]r=new byte[s.length()/2];for(int i=0;i<r.length;i++)r[i]=(byte)Integer.parseInt(s.substring(i*2,i*2+2),16);return r;}
     private static String hex(byte[]b){StringBuilder s=new StringBuilder();for(byte x:b)s.append(String.format(Locale.US,"%02x",x&255));return s.toString();}
     private static byte[]sha256(byte[]b)throws Exception{return MessageDigest.getInstance("SHA-256").digest(b);}
-    private static String hexSha256(String s)throws Exception{return hex(sha256(s.getBytes(StandardCharsets.UTF_8)));}
     private static byte[]hmac(byte[]key,String msg)throws Exception{Mac m=Mac.getInstance("HmacSHA256");m.init(new SecretKeySpec(key,"HmacSHA256"));return m.doFinal(msg.getBytes(StandardCharsets.UTF_8));}
     private static byte[]pbkdf2(String pass,byte[]salt,int it)throws Exception{PBEKeySpec s=new PBEKeySpec(pass.toCharArray(),salt,it,256);try{return SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256").generateSecret(s).getEncoded();}finally{s.clearPassword();}}
     private static String base64Sha256(String s)throws Exception{byte[]d=sha256(s.getBytes(StandardCharsets.UTF_8));String h=hex(d);return android.util.Base64.encodeToString(h.getBytes(StandardCharsets.UTF_8),android.util.Base64.NO_WRAP|android.util.Base64.URL_SAFE);}
