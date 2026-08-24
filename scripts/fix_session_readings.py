@@ -65,6 +65,7 @@ new_refresh = r'''    private void refreshData(){
                 String status=getQuiet("/api/monitoring/status");
                 String signal=getQuiet("/api/device/signal");
                 String signal2=getQuiet("/api/monitoring/signal");
+                String cell=getQuiet("/api/net/cell-info");
                 String plmn=getQuiet("/api/net/current-plmn");
                 String traffic=getQuiet("/api/monitoring/traffic-statistics");
                 String netmode=getQuiet("/api/net/net-mode");
@@ -78,7 +79,7 @@ new_refresh = r'''    private void refreshData(){
                 alias(m,signal,"nrrsrq","nrrsrq","NRRSRQ","nr_rsrq","NR_RSRQ","5g_rsrq");
                 alias(m,signal,"nrsinr","nrsinr","NRSINR","nr_sinr","NR_SINR","5g_sinr");
                 alias(m,signal,"nrrssi","nrrssi","NRRSSI","nr_rssi","NR_RSSI","5g_rssi");
-                alias(m,signal,"band","band","Band","CurrentBand","LTEBand","NetworkBand");
+                alias(m,signal,"band","band","Band","CurrentBand","LTEBand","NetworkBand","ltemain");
                 alias(m,signal,"pci","pci","PCI","cell_pci","PCellID");
                 alias(m,signal,"cell_id","cell_id","CellID","cellid","CellId","Cell_ID");
                 alias(m,signal,"enodeb_id","enodeb_id","ENodeB","eNodeB","enodeb","EnodeBID");
@@ -103,6 +104,11 @@ new_refresh = r'''    private void refreshData(){
                 alias(m,signal2,"nrrsrp","nrrsrp","NRRSRP","nr_rsrp","NR_RSRP");
                 alias(m,signal2,"nrrsrq","nrrsrq","NRRSRQ","nr_rsrq","NR_RSRQ");
                 alias(m,signal2,"nrsinr","nrsinr","NRSINR","nr_sinr","NR_SINR");
+                alias(m,cell,"pci","pci","PCI","PCellID");
+                alias(m,cell,"cell_id","cell_id","CellID","cellid","CellId");
+                alias(m,cell,"enodeb_id","enodeb_id","ENodeB","eNodeB","enb_id","EnodeBID");
+                alias(m,cell,"band","band","Band","LTEBand");
+                alias(m,cell,"lteearfcn","lteearfcn","EARFCN","earfcn","LTEEARFCN");
 
                 alias(m,plmn,"FullName","FullName","NetworkName","networkname","ShortName","Operator");
                 alias(m,plmn,"Numeric","Numeric","PLMN","plmn","numeric");
