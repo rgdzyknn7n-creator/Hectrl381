@@ -19,8 +19,8 @@ if needle in s and 'showBandDialog()' not in s:
     s=s.replace(needle,button+needle,1)
 
 methods=r'''    private void showBandDialog(){
-        final String[] bands={"B1","B3","B7","B8","B20","B28","B38","B40"};
-        final int[] nums={1,3,7,8,20,28,38,40};
+        final String[] bands={"B1","B3","B5","B7","B8","B18","B19","B20","B26","B28","B32","B34","B38","B39","B40","B41","B42","B43"};
+        final int[] nums={1,3,5,7,8,18,19,20,26,28,32,34,38,39,40,41,42,43};
         boolean[] checked=new boolean[bands.length];
         try{
             String current=lastData.get("LTEBand");
@@ -51,22 +51,24 @@ methods=r'''    private void showBandDialog(){
     private void setLteBands(String lteMask,AlertDialog dialog){
         io.execute(()->{
             try{
-                String mode=lastData.get("NetworkMode");
-                String networkBand=lastData.get("NetworkBand");
-                if(mode==null||mode.isEmpty())mode="03";
-                if(networkBand==null||networkBand.isEmpty())networkBand="3FFFFFFF";
-                String body="<?xml version=\"1.0\" encoding=\"UTF-8\"?><request><NetworkMode>"+xml(mode)+"</NetworkMode><NetworkBand>"+xml(networkBand)+"</NetworkBand><LTEBand>"+xml(lteMask)+"</LTEBand></request>";
-                HttpResult r=request("POST","/api/net/net-mode",body,true);
-                String err=errorCode(r.body);
-                if(!err.isEmpty())throw new Exception("رمز الراوتر "+err);
-                if(r.code>=400)throw new Exception("فشل تطبيق الترددات HTTP "+r.code);
-                captureTokens(r);
-                runOnUiThread(()->{dialog.dismiss();toast("تم تطبيق ترددات 4G: "+lteMask.toUpperCase(Locale.US));refreshData();});
-            }catch(Exception e){
-                runOnUiThread(()->toast("تعذر تطبيق الترددات: "+e.getMessage()));
-            }
+                String mode=lastData.get("NetworkMode"); if(mode==null||mode.isEmpty())mode="00";
+                String networkBand=lastData.get("NetworkBand"); if(networkBand==null||networkBand.isEmpty())networkBand="3FFFFFFF";
+                String current=lastData.get("LTEBand");
+                boolean included=false;
+                try{long cur=Long.parseUnsignedLong(current==null?"0":current.replace("0x","").replace("0X",""),16);long wanted=Long.parseUnsignedLong(lteMask,16);included=(cur&wanted)!=0;}catch(Exception ignored){}
+                if(!included){
+                    long wanted=Long.parseUnsignedLong(lteMask,16);int bit=0;while(bit<63&&(wanted&(1L<<bit))==0)bit++;
+                    String first=Long.toHexString(1L<<bit);
+                    String body1="<?xml version="1.0" encoding="UTF-8"?><request><NetworkMode>"+xml(mode)+"</NetworkMode><NetworkBand>"+xml(networkBand)+"</NetworkBand><LTEBand>"+first+"</LTEBand></request>";
+                    HttpResult q=request("POST","/api/net/net-mode",body1,true);String e=errorCode(q.body);if(!e.isEmpty())throw new Exception("رمز الراوتر "+e);captureTokens(q);Thread.sleep(1800);
+                }
+                String body="<?xml version="1.0" encoding="UTF-8"?><request><NetworkMode>"+xml(mode)+"</NetworkMode><NetworkBand>"+xml(networkBand)+"</NetworkBand><LTEBand>"+xml(lteMask)+"</LTEBand></request>";
+                HttpResult r=request("POST","/api/net/net-mode",body,true);String err=errorCode(r.body);if(!err.isEmpty())throw new Exception("رمز الراوتر "+err);if(r.code>=400)throw new Exception("فشل تطبيق الترددات HTTP "+r.code);captureTokens(r);saveSession();
+                runOnUiThread(()->{dialog.dismiss();toast("تم تطبيق تجميع 4G: "+lteMask.toUpperCase(Locale.US));refreshData();});
+            }catch(Exception e){runOnUiThread(()->toast("تعذر تطبيق تجميع 4G: "+e.getMessage()));}
         });
     }
+
 
 '''
 # Insert before the first onBackPressed method, near the end of the class.
