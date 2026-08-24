@@ -34,14 +34,9 @@ s, n = re.subn(pattern, replacement, s, count=1, flags=re.S)
 if n != 1:
     raise SystemExit('login block not found')
 
-# Huawei's type-4 password scheme is:
-# Base64(SHA256(username + Base64(SHA256(password)) + token))
-# Base64 must be the standard alphabet, not URL-safe Base64.
-s = s.replace(
-    'android.util.Base64.NO_WRAP|android.util.Base64.URL_SAFE',
-    'android.util.Base64.NO_WRAP',
-    1,
-)
+# Keep Huawei's WebUI-10 password encoding exactly as used by current
+# Huawei HiLink implementations: URL-safe Base64 over the hex SHA-256.
+# Do not change NO_WRAP|URL_SAFE to standard Base64.
 
 # Keep the canonical type-4 password derivation in legacyLogin().
 old = 'String hashed=base64Sha256(hexSha256(password));String passwordValue=base64Sha256(username+hashed+token);'
