@@ -38,14 +38,32 @@ needle = '    private String base(){return "http://"+router;}\n'
 insert = '''    private void saveCredentials(){
         if(prefs!=null) prefs.edit().putString("router",router).putString("username",username).putString("password",password).apply();
     }
+    private void saveSession(){
+        if(prefs!=null) prefs.edit().putString("cookie",cookie).putString("token",token).apply();
+    }
+    private boolean loadSession(){
+        if(prefs==null)return false;
+        String savedRouter=prefs.getString("router","");
+        String savedUser=prefs.getString("username","");
+        String savedCookie=prefs.getString("cookie","");
+        String savedToken=prefs.getString("token","");
+        if(!router.equals(savedRouter)||!username.equals(savedUser)||savedCookie.isEmpty()||savedToken.isEmpty())return false;
+        cookie=savedCookie;token=savedToken;return true;
+    }
+    private void clearSession(){
+        cookie="";token="";tokenOne="";tokenTwo="";
+        if(prefs!=null)prefs.edit().remove("cookie").remove("token").apply();
+    }
     private void autoConnectSaved(){
-        setContentView(tv("جاري الاتصال المحفوظ بالراوتر...",16));
+        setContentView(tv("جاري استعادة الاتصال بالراوتر...",16));
         io.execute(()->{
             try{
-                login();
+                if(!loadSession())login();
+                else{try{verifyLoggedIn();}catch(Exception invalid){clearSession();login();}}
+                saveSession();
                 runOnUiThread(()->{dashboard();startAutoRefresh();});
             }catch(Exception e){
-                runOnUiThread(()->{loginScreen();toast("انتهت جلسة الراوتر، أدخل كلمة المرور مرة أخرى: "+e.getMessage());});
+                runOnUiThread(()->{loginScreen();toast("تعذر استعادة الدخول: "+e.getMessage());});
             }
         });
     }
